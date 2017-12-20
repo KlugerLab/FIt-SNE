@@ -1,0 +1,6 @@
+bin/*
+temp/*
+*.m~
+*.dat
+.DS_Store
+*.sw*
