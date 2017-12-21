@@ -20,7 +20,7 @@ function [mappedX, costs, initialError] = fast_tsne(X,  opts, initial_data)
 %                   opts.nbody_algo - if theta is nonzero, this determins whether to
 %                        use FMM or Barnes Hut approximation. 'bh' for
 %                        Barnes Hut and 'fmm' for FMM. Default 'fmm'
-%                   opts.compexagcoef - coefficient for early exaggeration
+%                   opts.early_exag_coeff - coefficient for early exaggeration
 %                       (>1). Default 12.
 %                   opts.stop_lying_iter - When to switch off early exaggeration or
 %                       compression.  Default 200.
@@ -103,10 +103,10 @@ function [mappedX, costs, initialError] = fast_tsne(X,  opts, initial_data)
         max_iter = opts.max_iter;
     end
     
-    if (~isfield(opts, 'compexagcoef'))
-        compexagcoef = 12;
+    if (~isfield(opts, 'early_exag_coeff'))
+        early_exag_coeff = 12;
     else
-        compexagcoef = opts.compexagcoef;
+        early_exag_coeff = opts.early_exag_coeff;
     end
     if (~isfield(opts, 'start_late_exag_iter'))
         start_late_exag_iter = -1;
@@ -129,9 +129,20 @@ function [mappedX, costs, initialError] = fast_tsne(X,  opts, initial_data)
             nbody_algo = 2;
         end
     end
+    if (~isfield(opts, 'knn_algo'))
+        knn_algo = 1; %default is ann
+    else
+        if ( opts.knn_algo == 'vptree')
+            knn_algo = 2;
+        else
+            knn_algo = 1;
+        end
+    end
+    
+    
 
     if (~isfield(opts, 'no_momentum_during_exag'))
-        no_momentum_during_exag = 1;
+        no_momentum_during_exag = 0;
     else
         no_momentum_during_exag = opts.no_momentum_during_exag;
     end
@@ -148,7 +159,6 @@ function [mappedX, costs, initialError] = fast_tsne(X,  opts, initial_data)
 
     K = -1;
     sigma = -30;
-    compexag = 2;
 
     
     X = double(X);
@@ -157,13 +167,13 @@ function [mappedX, costs, initialError] = fast_tsne(X,  opts, initial_data)
     
     % Compile t-SNE C code
     if(~exist(fullfile(tsne_path,'./fast_tsne'),'file') && isunix)
-        system(sprintf('g++ -std=c++11 -Wno-unused-result -DNDEBUG -O3  src/nbody.cpp src/sptree.cpp src/tsne.cpp src/nbodyfft.cpp  -o bin/fast_tsne -pthread -lfftw3 -lm'));
+        system(sprintf('g++ -std=c++11 -O3  src/sptree.cpp src/tsne.cpp src/nbodyfft.cpp  -o bin/fast_tsne -pthread -lfftw3 -lm'));
     end
 
     % Run the fast diffusion SNE implementation
-    write_data('temp/data.dat',X, no_dims, theta, perplexity, max_iter, stop_lying_iter, K, sigma, nbody_algo,no_momentum_during_exag, compexag, compexagcoef,n_trees, search_k,start_late_exag_iter, late_exag_coeff);
+    write_data('temp/data.dat',X, no_dims, theta, perplexity, max_iter, stop_lying_iter, K, sigma, nbody_algo,no_momentum_during_exag, knn_algo, early_exag_coeff,n_trees, search_k,start_late_exag_iter, late_exag_coeff);
     if (given_init)
-       % write_data('temp/initial_data.dat',initial_data, no_dims, theta, perplexity, max_iter, stop_lying_iter, K,sigma, nbody_algo, no_momentum_during_exag,compexag, compexagcoef, n_trees, search_k);
+       % write_data('temp/initial_data.dat',initial_data, no_dims, theta, perplexity, max_iter, stop_lying_iter, K,sigma, nbody_algo, no_momentum_during_exag,knn_algo, early_exag_coeff, n_trees, search_k);
     end
     disp('Data written');
     tic
@@ -179,7 +189,7 @@ end
 
 
 % Writes the datafile for the fast t-SNE implementation
-function write_data(filename, X, no_dims, theta, perplexity, max_iter, stop_lying_iter,K, sigma, nbody_algo,no_momentum_during_exag, compexag, compexagcoeff,n_trees, search_k,start_late_exag_iter, late_exag_coeff)
+function write_data(filename, X, no_dims, theta, perplexity, max_iter, stop_lying_iter,K, sigma, nbody_algo,no_momentum_during_exag, knn_algo, early_exag_coeff,n_trees, search_k,start_late_exag_iter, late_exag_coeff)
     [n, d] = size(X);
     %h = fopen('data.dat', 'wb');
     h = fopen(filename, 'wb');
@@ -193,8 +203,8 @@ function write_data(filename, X, no_dims, theta, perplexity, max_iter, stop_lyin
     fwrite(h, K, 'int');
     fwrite(h, sigma, 'double');
     fwrite(h, nbody_algo, 'int');
-    fwrite(h, compexag, 'int');
-    fwrite(h, compexagcoeff, 'double');
+    fwrite(h, knn_algo, 'int');
+    fwrite(h, early_exag_coeff, 'double');
     fwrite(h, no_momentum_during_exag, 'int');
     fwrite(h, n_trees, 'int');
     fwrite(h, search_k, 'int');

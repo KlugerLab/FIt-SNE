@@ -87,7 +87,7 @@ void print_progress ( int iter, double * Y, int N, int no_dims){
 // Perform t-SNE
 int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity, double theta, int rand_seed,
 		bool skip_random_init, int max_iter, int stop_lying_iter, 
-		int mom_switch_iter, int K, double sigma, int nbody_algo, int compexag, double compexagcoeff,double * initialError, double * costs, bool no_momentum_during_exag,
+		int mom_switch_iter, int K, double sigma, int nbody_algo, int knn_algo, double early_exag_coeff,double * initialError, double * costs, bool no_momentum_during_exag,
 		int start_late_exag_iter, double late_exag_coeff, int n_trees,int search_k) {
 
 	// Set random seed
@@ -109,7 +109,7 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 	}else{
 		printf("Will use momentum during exaggeration phase\n");
 	}
-	printf("Using no_dims = %d, max_iter = %d, perplexity = %f, theta = %f, K = %d, Sigma = %lf, compexag = %d, compexagcoeff = %f, data[0] = %lf", no_dims, max_iter, perplexity, theta, K, sigma, compexag, compexagcoeff, X[0]);
+	printf("Using no_dims = %d, max_iter = %d, perplexity = %f, theta = %f, K = %d, Sigma = %lf, knn_algo = %d, early_exag_coeff = %f, data[0] = %lf", no_dims, max_iter, perplexity, theta, K, sigma, knn_algo, early_exag_coeff, X[0]);
 
 	bool exact = (theta == .0) ? true : false;
 
@@ -182,13 +182,18 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 			computeGaussianPerplexity(X, N, D, &row_P, &col_P, &val_P, perplexity, K, sigma);
 		}else {
 			printf("Using perplexity, not the manually set kernel width.  K (number of nearest neighbors) and sigma (bandwidth) parameters are going to be ignored.\n");
-			if (true) {
+			if (knn_algo == 1) {
 				printf("Using ANNOY for knn search, with parameters: n_trees %d and search_k%d\n", n_trees, search_k);
 				int error_code = 0;
 				error_code = computeGaussianPerplexity(X, N, D, &row_P, &col_P, &val_P, perplexity, (int) (3 * perplexity), -1, n_trees,search_k);
 				if (error_code <0) return error_code;
-			}else{
+			}else if (knn_algo == 2){
+				printf("Using vp trees for nearest neighbor search\n");
 				computeGaussianPerplexity(X, N, D, &row_P, &col_P, &val_P, perplexity, (int) (3 * perplexity), -1);
+
+			}else{
+				printf("Invalid knn_algo param\n");
+				exit(1);
 			}
 		}
 
@@ -211,37 +216,35 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 
 	// If we are doing early exaggeration, we premultiply all the P by the coefficient of early exaggeration, compexagcoef
 	double max_sum_cols = 0;
-	if (compexag == 2) {
-		//Compute maximum possible exaggeration coefficient, if user requests
-		if (compexagcoeff == 0 ) {
-				for(int n = 0; n < N; n++) {
-					double running_sum = 0;
-					for(int i = row_P[n]; i < row_P[n + 1]; i++) {
-						running_sum += val_P[i];
-						//printf("val_P[i] = %lf\n", val_P[i]);
-					}
-					if (running_sum > max_sum_cols ) max_sum_cols = running_sum;
-				}
-			compexagcoeff = (1.0/(eta*max_sum_cols) );
-			//compexagcoeff = (1.0/(max_sum_cols) );
-			printf("Max of the val_Ps is: %lf\n", max_sum_cols);
-		}
-
-		printf("Exagerating Ps by %f\n", compexagcoeff);
-		if(exact) { 
-			for(int i = 0; i < N * N; i++)   { 
-				P[i] *= compexagcoeff;
+	//Compute maximum possible exaggeration coefficient, if user requests
+	if (early_exag_coeff == 0 ) {
+		for(int n = 0; n < N; n++) {
+			double running_sum = 0;
+			for(int i = row_P[n]; i < row_P[n + 1]; i++) {
+				running_sum += val_P[i];
+				//printf("val_P[i] = %lf\n", val_P[i]);
 			}
-		}else{ 
-			for(int i = 0; i < row_P[N]; i++)
-				val_P[i] *= compexagcoeff;
-		} 
+			if (running_sum > max_sum_cols ) max_sum_cols = running_sum;
+		}
+		early_exag_coeff = (1.0/(eta*max_sum_cols) );
+		//early_exag_coeff = (1.0/(max_sum_cols) );
+		printf("Max of the val_Ps is: %lf\n", max_sum_cols);
 	}
+
+	printf("Exagerating Ps by %f\n", early_exag_coeff);
+	if(exact) { 
+		for(int i = 0; i < N * N; i++)   { 
+			P[i] *= early_exag_coeff;
+		}
+	}else{ 
+		for(int i = 0; i < row_P[N]; i++)
+			val_P[i] *= early_exag_coeff;
+	} 
 
 	print_progress (0, Y, N, no_dims);
 
 	// Perform main training loop
-	
+
 	clock_gettime(CLOCK_MONOTONIC, &finish_timespec);
 	double elapsed_input = (finish_timespec.tv_sec - start_timespec.tv_sec);
 
@@ -261,47 +264,30 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 
 	for(int iter = 0; iter < max_iter; iter++) {
 		itTest = iter;
-		//Epsilon is the compexagcoeff when doing early compression
-		double epsilon;
-		if ( compexag == 1 && iter < stop_lying_iter ) {
-			if (theta > 0) {
-				printf("Early compression for non-exact gradient have not been implemented.\n");
-				exit(23432);
-			}
-			epsilon = compexagcoeff;
-		}else {
-			epsilon = 1.0;
-		}
-		if (iter==1){
-			for(int i = 0; i < N*2 ; i++) {
 
-				//printf("Y[%d]: %e\n",i,Y[i]);
-			}
-		}
-
-			if(exact){
-				computeExactGradient(P, Y, N, no_dims, dY, epsilon);
-			}else{
-				if (nbody_algo == 2) {
-					if (no_dims == 1){
-						computeFftGradientOneD(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta);
-					}else{
-						computeFftGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta);
-					}
-				}else if(nbody_algo == 1) {
-					computeGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta);
+		if(exact){
+			computeExactGradient(P, Y, N, no_dims, dY);
+		}else{
+			if (nbody_algo == 2) {
+				if (no_dims == 1){
+					computeFftGradientOneD(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta);
+				}else{
+					computeFftGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta);
 				}
+			}else if(nbody_algo == 1) {
+				computeGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta);
 			}
+		}
 		if (measure_accuracy){
 			computeGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta);
 			computeFftGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta);
-			computeExactGradientTest(Y, N, no_dims,  epsilon);
+			computeExactGradientTest(Y, N, no_dims);
 		}
 
 		//some diagnostic output
 		//for(int i = 0; i < 10 ; i++) {
-			//printf("%d,truth: %le, Estimate: %le\n", i,dYExact[i], dY[i]);
-			//printf("dY[%d]: %le\n", i, dY[i]);
+		//printf("%d,truth: %le, Estimate: %le\n", i,dYExact[i], dY[i]);
+		//printf("dY[%d]: %le\n", i, dY[i]);
 		//}
 
 		//User can specify to turn off momentum/gains until after the early exaggeration phase is completed
@@ -326,17 +312,15 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 		zeroMean(Y, N, no_dims);
 
 		//Switch off early exaggeration
-		if (compexag == 2) {
-			if(iter == stop_lying_iter) {
-				printf("Unexaggerating Ps by %f\n", compexagcoeff);
-				if(exact) { for(int i = 0; i < N * N; i++)        P[i] /= compexagcoeff; }
-				else      { for(int i = 0; i < row_P[N]; i++) val_P[i] /= compexagcoeff; }
-			}
-			if(iter == start_late_exag_iter) {
-				printf("Exaggerating Ps by %f\n", late_exag_coeff);
-				if(exact) { for(int i = 0; i < N * N; i++)        P[i] *= late_exag_coeff; }
-				else      { for(int i = 0; i < row_P[N]; i++) val_P[i] *= late_exag_coeff; }
-			}
+		if(iter == stop_lying_iter) {
+			printf("Unexaggerating Ps by %f\n", early_exag_coeff);
+			if(exact) { for(int i = 0; i < N * N; i++)        P[i] /= early_exag_coeff; }
+			else      { for(int i = 0; i < row_P[N]; i++) val_P[i] /= early_exag_coeff; }
+		}
+		if(iter == start_late_exag_iter) {
+			printf("Exaggerating Ps by %f\n", late_exag_coeff);
+			if(exact) { for(int i = 0; i < N * N; i++)        P[i] *= late_exag_coeff; }
+			else      { for(int i = 0; i < row_P[N]; i++) val_P[i] *= late_exag_coeff; }
 		}
 		if(iter == mom_switch_iter) momentum = final_momentum;
 
@@ -369,12 +353,12 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 	}
 	printf("N-body phase completed in %4.2f seconds.\n", total_time);
 	/*
-	FILE * fp = fopen( "temp/time_results.txt", "a" ); // Open file for writing
-	if (fp != NULL) {
-		fprintf(fp,"%f, %f\n", elapsed_input, total_time);
-		fclose(fp);
-	}
-	*/
+	   FILE * fp = fopen( "temp/time_results.txt", "a" ); // Open file for writing
+	   if (fp != NULL) {
+	   fprintf(fp,"%f, %f\n", elapsed_input, total_time);
+	   fclose(fp);
+	   }
+	   */
 	return 0;
 }
 
@@ -405,7 +389,8 @@ void TSNE::computeGradient(double* P, unsigned int* inp_row_P, unsigned int* inp
 		dC[i] = pos_f[i] - (neg_f[i] / sum_Q);
 		if (measure_accuracy) {
 			if (i < N) 
-				fprintf(fp,"%d,  %lf\n",i, neg_f[i*2]/sum_Q);
+				//fprintf(fp,"%d,  %lf\n",i, neg_f[i*2]/sum_Q);
+				fprintf(fp,"%d, %.12e, %.12e, %.12e,%.12e,%.12e  %.12e\n",i,dC[i*2],dC[i*2+1], pos_f[i*2],pos_f[i*2+1], neg_f[i*2]/sum_Q, neg_f[i*2+1]/sum_Q);
 		}
 	}
 	if (measure_accuracy) {
@@ -446,7 +431,7 @@ void TSNE::computeFftGradientOneD(double* P, unsigned int* inp_row_P, unsigned i
 		chargesQij[2*N+j] =  Y[j]*Y[j];
 	} 
 	for (unsigned long i = 0; i < N; i++) {
-			//printf("loc: %f, %f, %f, %f\n", locs[i], chargesQij[i], chargesQij[1*N+i], chargesQij[2*N+i]);
+		//printf("loc: %f, %f, %f, %f\n", locs[i], chargesQij[i], chargesQij[1*N+i], chargesQij[2*N+i]);
 	}
 	double * pot = (double*) calloc(N*ndim, sizeof(double));
 	clock_t begin = clock();
@@ -606,7 +591,7 @@ void TSNE::computeFftGradient(double* P, unsigned int* inp_row_P, unsigned int* 
 	clock_t end2 = clock();
 	double time_spent2 = (double)(end2 - startTime) / CLOCKS_PER_SEC;
 	//printf("%d points in 2D with %d charges from %f to %f. nlat: %d, nterms: %d, so (nlat*nlat*nterms)^2 = %d point FFT. \nFast: %.2e seconds, %.2e per second\n", 
-			//N, ndim, minloc, maxloc,nlat,nterms,nlat*nterms*2*nlat*nterms*2,  time_spent2, N/time_spent2);
+	//N, ndim, minloc, maxloc,nlat,nterms,nlat*nterms*2*nlat*nterms*2,  time_spent2, N/time_spent2);
 
 	//Now, figure out the Gaussian component of the gradient.  This
 	//coresponds to the "attraction" term of the gradient.  It was
@@ -665,7 +650,7 @@ void TSNE::computeFftGradient(double* P, unsigned int* inp_row_P, unsigned int* 
 		dC[n*2+1] = pos_f[n*2+1] - neg_f[n*2+1];
 		//fprintf(fp, "%d, %e, %e, %e\n",n, dC[n*2+0], pos_f[n*2], neg_f[n*2]);
 		if (measure_accuracy){
-			fprintf(fp, "%d,  %.12e\n",n,  neg_f[n*2]);
+			fprintf(fp,"%d, %.12e, %.12e, %.12e, %.12e, %.12e  %.12e\n",n, dC[n*2+0], dC[n*2+1], pos_f[n*2],pos_f[n*2+1], neg_f[n*2], neg_f[n*2+1]);
 		}
 		if (n<10){
 			//printf("fft: %d, %e, %e, %e\n",n, dC[n*2+0], pos_f[n*2], neg_f[n*2]);
@@ -692,7 +677,7 @@ void TSNE::computeFftGradient(double* P, unsigned int* inp_row_P, unsigned int* 
 }
 
 
-void TSNE::computeExactGradientTest(double* Y, int N, int D, double epsilon) {
+void TSNE::computeExactGradientTest(double* Y, int N, int D) {
 	// Compute the squared Euclidean distance matrix
 	double* DD = (double*) malloc(N * N * sizeof(double));
 	if(DD == NULL) { printf("Memory allocation failed!\n"); exit(1); }
@@ -727,11 +712,11 @@ void TSNE::computeExactGradientTest(double* Y, int N, int D, double epsilon) {
 		int mD = 0;
 		for(int m = 0; m < N; m++) {
 			if(n != m) {
-				testNeg +=Q[nN+m]*epsilon*epsilon*Q[nN+m]*(Y[nD + 0] - Y[mD + 0]) / sum_Q;
+				testNeg +=Q[nN+m]*Q[nN+m]*(Y[nD + 0] - Y[mD + 0]) / sum_Q;
 			}
 			mD += D;
 		}
-			fprintf(fp, "%d, %.12e\n",n,testNeg);
+		fprintf(fp, "%d, %.12e\n",n,testNeg);
 		nN += N;
 		nD += D;
 	}
@@ -740,7 +725,7 @@ void TSNE::computeExactGradientTest(double* Y, int N, int D, double epsilon) {
 }
 
 // Compute gradient of the t-SNE cost function (exact)
-void TSNE::computeExactGradient(double* P, double* Y, int N, int D, double* dC, double epsilon) {
+void TSNE::computeExactGradient(double* P, double* Y, int N, int D, double* dC) {
 	// Make sure the current gradient contains zeros
 	for(int i = 0; i < N * D; i++) dC[i] = 0.0;
 
@@ -778,16 +763,13 @@ void TSNE::computeExactGradient(double* P, double* Y, int N, int D, double* dC, 
 		int mD = 0;
 		for(int m = 0; m < N; m++) {
 			if(n != m) {
-				double mult = (P[nN + m] - (epsilon*Q[nN + m] / sum_Q)) * epsilon*Q[nN + m];
-				if (n < 20 & m<40 ) {
-					//		printf(" %d, %d:  mult: %lf, epsilon %lf, P: %lf, Q: %lf\n", n,m, mult, epsilon, P[nN + m], Q[nN +m]);
-				}
+				double mult = (P[nN + m] - (Q[nN + m] / sum_Q)) * Q[nN + m];
 				for(int d = 0; d < D; d++) {
 					dC[nD + d] += (Y[nD + d] - Y[mD + d]) * mult;
 				}
 				testQij += Q[nN + m]* Q[nN +m] *(Y[nD] - Y[mD]);
-				testPos +=P[nN +m]*epsilon*Q[nN+m]*(Y[nD + 0] - Y[mD + 0]);
-				testNeg +=Q[nN+m]*epsilon*epsilon*Q[nN+m]*(Y[nD + 0] - Y[mD + 0]) / sum_Q;
+				testPos +=P[nN +m]*Q[nN+m]*(Y[nD + 0] - Y[mD + 0]);
+				testNeg +=Q[nN+m]*Q[nN+m]*(Y[nD + 0] - Y[mD + 0]) / sum_Q;
 			}
 			mD += D;
 		}
@@ -796,7 +778,7 @@ void TSNE::computeExactGradient(double* P, double* Y, int N, int D, double* dC, 
 			//printf("dC: %e, %e testDc %e \n", dC[nD +0], dC[nD+1], testdC);
 
 		}
-			fprintf(fp, "%d, %.12e\n",n,testNeg);
+		fprintf(fp, "%d, %.12e\n",n,testNeg);
 		nN += N;
 		nD += D;
 	}
@@ -1080,96 +1062,96 @@ int TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row
 							{
 							// inner loop
 							{
-								//if(n % 10000 == 0) printf(" - point %d of %d\n", n, N);
+							//if(n % 10000 == 0) printf(" - point %d of %d\n", n, N);
 
-								// Find nearest neighbors
-								std::vector<int> closest;
-								std::vector<double> closest_distances;
-								tree.get_nns_by_item(n, K+1, search_k, &closest, &closest_distances);
-								//for(int m = 0; m < 5; m++) {
-								//					printf("annoy: %d, %d, %lf vs. ball: %d,%d, %lf\n", n, closest[m], closest_distances[m], n, indices[m].index(), distances[m]);
-								//					double distancecalc = 0;
-								//					for (int ii=0; ii< D; ii++) {
-								//						distancecalc += pow(X[n*D + ii] - X[closest[m]*D + ii],2.0);
-								//					}
-								//					printf("Checking dsitances to %d point: %lf \n", closest[m], sqrt(distancecalc));
-								//			}
-								//			printf("\n");
-								//
-								// Initialize some variables for binary search
-								bool found = false;
-								double beta = 1.0;
-								double min_beta = -DBL_MAX;
-								double max_beta =  DBL_MAX;
-								double tol = 1e-5;
-								double* cur_P = (double*) malloc((N - 1) * sizeof(double));
-								if(cur_P == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+							// Find nearest neighbors
+							std::vector<int> closest;
+							std::vector<double> closest_distances;
+							tree.get_nns_by_item(n, K+1, search_k, &closest, &closest_distances);
+							//for(int m = 0; m < 5; m++) {
+							//					printf("annoy: %d, %d, %lf vs. ball: %d,%d, %lf\n", n, closest[m], closest_distances[m], n, indices[m].index(), distances[m]);
+							//					double distancecalc = 0;
+							//					for (int ii=0; ii< D; ii++) {
+							//						distancecalc += pow(X[n*D + ii] - X[closest[m]*D + ii],2.0);
+							//					}
+							//					printf("Checking dsitances to %d point: %lf \n", closest[m], sqrt(distancecalc));
+							//			}
+							//			printf("\n");
+							//
+							// Initialize some variables for binary search
+							bool found = false;
+							double beta = 1.0;
+							double min_beta = -DBL_MAX;
+							double max_beta =  DBL_MAX;
+							double tol = 1e-5;
+							double* cur_P = (double*) malloc((N - 1) * sizeof(double));
+							if(cur_P == NULL) { printf("Memory allocation failed!\n"); exit(1); }
 
-								// Iterate until we found a good perplexity
-								int iter = 0; double sum_P;
-								if (perplexity > 0) {
-									while(!found && iter < 200) {
+							// Iterate until we found a good perplexity
+							int iter = 0; double sum_P;
+							if (perplexity > 0) {
+								while(!found && iter < 200) {
 
-										// Compute Gaussian kernel row
-										for(int m = 0; m < K; m++) cur_P[m] = exp(-beta * closest_distances[m + 1] * closest_distances[m + 1]);
-										//for(int m = 0; m < K; m++) cur_P[m] = exp(-beta * distances[m + 1] * distances[m + 1]);
-
-										// Compute entropy of current row
-										sum_P = DBL_MIN;
-										for(int m = 0; m < K; m++) sum_P += cur_P[m];
-										double H = .0;
-										for(int m = 0; m < K; m++) H += beta * (closest_distances[m + 1] * closest_distances[m + 1] * cur_P[m]);
-										//for(int m = 0; m < K; m++) H += beta * (distances[m + 1] * distances[m + 1] * cur_P[m]);
-										H = (H / sum_P) + log(sum_P);
-
-										// Evaluate whether the entropy is within the tolerance level
-										double Hdiff = H - log(perplexity);
-										if(Hdiff < tol && -Hdiff < tol) {
-											found = true;
-											if(n % 10000 == 0) printf(" - point %d of %d, most recent beta calculated is %lf \n", n, N, beta);
-
-										}
-										else {
-											if(Hdiff > 0) {
-												min_beta = beta;
-												if(max_beta == DBL_MAX || max_beta == -DBL_MAX)
-													beta *= 2.0;
-												else
-													beta = (beta + max_beta) / 2.0;
-											}
-											else {
-												max_beta = beta;
-												if(min_beta == -DBL_MAX || min_beta == DBL_MAX)
-													beta /= 2.0;
-												else
-													beta = (beta + min_beta) / 2.0;
-											}
-										}
-
-										// Update iteration counter
-										iter++;
-									}
-								}else{
-									beta = 1/sigma;
-									//printf("Beta is %lf\n", beta);
+									// Compute Gaussian kernel row
 									for(int m = 0; m < K; m++) cur_P[m] = exp(-beta * closest_distances[m + 1] * closest_distances[m + 1]);
+									//for(int m = 0; m < K; m++) cur_P[m] = exp(-beta * distances[m + 1] * distances[m + 1]);
 
 									// Compute entropy of current row
 									sum_P = DBL_MIN;
 									for(int m = 0; m < K; m++) sum_P += cur_P[m];
-								}
+									double H = .0;
+									for(int m = 0; m < K; m++) H += beta * (closest_distances[m + 1] * closest_distances[m + 1] * cur_P[m]);
+									//for(int m = 0; m < K; m++) H += beta * (distances[m + 1] * distances[m + 1] * cur_P[m]);
+									H = (H / sum_P) + log(sum_P);
 
-								// Row-normalize current row of P and store in matrix
-								for(unsigned int m = 0; m < K; m++) cur_P[m] /= sum_P;
-								for(unsigned int m = 0; m < K; m++) {
-									//				col_P[row_P[n] + m] = (unsigned int) indices[m + 1].index();
-									col_P[row_P[n] + m] = (unsigned int) closest[m + 1];
-									val_P[row_P[n] + m] = cur_P[m];
+									// Evaluate whether the entropy is within the tolerance level
+									double Hdiff = H - log(perplexity);
+									if(Hdiff < tol && -Hdiff < tol) {
+										found = true;
+										if(n % 10000 == 0) printf(" - point %d of %d, most recent beta calculated is %lf \n", n, N, beta);
+
+									}
+									else {
+										if(Hdiff > 0) {
+											min_beta = beta;
+											if(max_beta == DBL_MAX || max_beta == -DBL_MAX)
+												beta *= 2.0;
+											else
+												beta = (beta + max_beta) / 2.0;
+										}
+										else {
+											max_beta = beta;
+											if(min_beta == -DBL_MAX || min_beta == DBL_MAX)
+												beta /= 2.0;
+											else
+												beta = (beta + min_beta) / 2.0;
+										}
+									}
+
+									// Update iteration counter
+									iter++;
 								}
-								//	printf("Using this perplexity, learned a sqrt(beta) of %lf, sqrt(1/beta) = %lf \n", sqrt(beta), sqrt(1/beta));
-								free(cur_P);
-								closest.clear();
-								closest_distances.clear();
+							}else{
+								beta = 1/sigma;
+								//printf("Beta is %lf\n", beta);
+								for(int m = 0; m < K; m++) cur_P[m] = exp(-beta * closest_distances[m + 1] * closest_distances[m + 1]);
+
+								// Compute entropy of current row
+								sum_P = DBL_MIN;
+								for(int m = 0; m < K; m++) sum_P += cur_P[m];
+							}
+
+							// Row-normalize current row of P and store in matrix
+							for(unsigned int m = 0; m < K; m++) cur_P[m] /= sum_P;
+							for(unsigned int m = 0; m < K; m++) {
+								//				col_P[row_P[n] + m] = (unsigned int) indices[m + 1].index();
+								col_P[row_P[n] + m] = (unsigned int) closest[m + 1];
+								val_P[row_P[n] + m] = cur_P[m];
+							}
+							//	printf("Using this perplexity, learned a sqrt(beta) of %lf, sqrt(1/beta) = %lf \n", sqrt(beta), sqrt(1/beta));
+							free(cur_P);
+							closest.clear();
+							closest_distances.clear();
 							}
 							}
 							},t*N/nthreads,(t+1)==nthreads?N:(t+1)*N/nthreads,t));
@@ -1183,28 +1165,28 @@ int TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row
 
 
 		/*
-		FILE *h;
-		if((h = fopen("temp/val_P.dat", "w+b")) == NULL) {
-			printf("Error: could not open data file.\n");
-			return;
-		}
-		fwrite(val_P, sizeof(double), N * K, h);
-		fclose(h);
+		   FILE *h;
+		   if((h = fopen("temp/val_P.dat", "w+b")) == NULL) {
+		   printf("Error: could not open data file.\n");
+		   return;
+		   }
+		   fwrite(val_P, sizeof(double), N * K, h);
+		   fclose(h);
 
-		if((h = fopen("temp/col_P.dat", "w+b")) == NULL) {
-			printf("Error: could not open data file.\n");
-			return;
-		}
-		fwrite(col_P, sizeof(unsigned int), N * K, h);
-		fclose(h);
+		   if((h = fopen("temp/col_P.dat", "w+b")) == NULL) {
+		   printf("Error: could not open data file.\n");
+		   return;
+		   }
+		   fwrite(col_P, sizeof(unsigned int), N * K, h);
+		   fclose(h);
 
-		if((h = fopen("temp/row_P.dat", "w+b")) == NULL) {
-			printf("Error: could not open data file.\n");
-			return;
-		}
-		fwrite(row_P, sizeof(unsigned int), N +1, h);
-		fclose(h);
-		*/
+		   if((h = fopen("temp/row_P.dat", "w+b")) == NULL) {
+		   printf("Error: could not open data file.\n");
+		   return;
+		   }
+		   fwrite(row_P, sizeof(unsigned int), N +1, h);
+		   fclose(h);
+		   */
 
 	}
 	return 0;
@@ -1212,185 +1194,100 @@ int TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row
 // Compute input similarities with a fixed perplexity using ball trees (this function allocates memory another function should free)
 void TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row_P, unsigned int** _col_P, double** _val_P, double perplexity, int K, double sigma) {
 
-	if( access( "temp/val_P.dat", F_OK ) != -1 ) {
-		printf("val_P exists, loading the file.");
-		*_row_P = (unsigned int*)    malloc((N + 1) * sizeof(unsigned int));
-		*_col_P = (unsigned int*)    calloc(N * K, sizeof(unsigned int));
-		*_val_P = (double*) calloc(N * K, sizeof(double));
-		unsigned int* row_P = *_row_P;
-		unsigned int* col_P = *_col_P;
-		double* val_P = *_val_P;
 
-		if(*_row_P == NULL || *_col_P == NULL || *_val_P == NULL) { printf("Memory allocation failed!\n"); exit(1); }
-		FILE *h;
-		if((h = fopen("temp/val_P.dat", "rb")) == NULL) {
-			printf("Error: could not open data file.\n");
-			return;
-		}
-		fread(val_P, sizeof(double), N * K, h);
-		fclose(h);
+	if(perplexity > K) printf("Perplexity should be lower than K!\n");
 
-		if((h = fopen("temp/col_P.dat", "rb")) == NULL) {
-			printf("Error: could not open data file.\n");
-			return;
-		}
-		fread(col_P, sizeof(unsigned int), N * K, h);
-		fclose(h);
+	// Allocate the memory we need
+	*_row_P = (unsigned int*)    malloc((N + 1) * sizeof(unsigned int));
+	*_col_P = (unsigned int*)    calloc(N * K, sizeof(unsigned int));
+	*_val_P = (double*) calloc(N * K, sizeof(double));
+	if(*_row_P == NULL || *_col_P == NULL || *_val_P == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+	unsigned int* row_P = *_row_P;
+	unsigned int* col_P = *_col_P;
+	double* val_P = *_val_P;
+	double* cur_P = (double*) malloc((N - 1) * sizeof(double));
+	if(cur_P == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+	row_P[0] = 0;
+	for(int n = 0; n < N; n++) row_P[n + 1] = row_P[n] + (unsigned int) K;
 
-		if((h = fopen("temp/row_P.dat", "rb")) == NULL) {
-			printf("Error: could not open data file.\n");
-			return;
-		}
-		fread(row_P, sizeof(unsigned int), N +1, h);
-		fclose(h);
-		printf("dat files loaded successfully %u\n", row_P[1]);
-		return;
+	// Build ball tree on data set
+	VpTree<DataPoint, euclidean_distance>* tree = new VpTree<DataPoint, euclidean_distance>();
+	vector<DataPoint> obj_X(N, DataPoint(D, -1, X));
+	for(int n = 0; n < N; n++) obj_X[n] = DataPoint(D, n, X + n * D);
+	tree->create(obj_X);
 
+	// Loop over all points to find nearest neighbors
+	printf("Building tree...\n");
+	vector<DataPoint> indices;
+	vector<double> distances;
+	for(int n = 0; n < N; n++) {
 
-	}else{
-		//printf("K is %d, but the perplexity which we will use for beta is %lf", perplexity, K);
-		if(perplexity > K) printf("Perplexity should be lower than K!\n");
+		if(n % 10000 == 0) printf(" - point %d of %d\n", n, N);
 
-		// Allocate the memory we need
-		*_row_P = (unsigned int*)    malloc((N + 1) * sizeof(unsigned int));
-		*_col_P = (unsigned int*)    calloc(N * K, sizeof(unsigned int));
-		printf("Going to allocate N: %d, K: %d, N*K = %d\n ", N, K, N*K);
-		*_val_P = (double*) calloc(N * K, sizeof(double));
-		if(*_row_P == NULL || *_col_P == NULL || *_val_P == NULL) { printf("Memory allocation failed!\n"); exit(1); }
-		unsigned int* row_P = *_row_P;
-		unsigned int* col_P = *_col_P;
-		double* val_P = *_val_P;
-		double* cur_P = (double*) malloc((N - 1) * sizeof(double));
-		if(cur_P == NULL) { printf("Memory allocation failed!\n"); exit(1); }
-		row_P[0] = 0;
-		for(int n = 0; n < N; n++) row_P[n + 1] = row_P[n] + (unsigned int) K;
+		// Find nearest neighbors
+		indices.clear();
+		distances.clear();
+		tree->search(obj_X[n], K + 1, &indices, &distances);
 
-		// Build ball tree on data set
-		VpTree<DataPoint, euclidean_distance>* tree = new VpTree<DataPoint, euclidean_distance>();
-		vector<DataPoint> obj_X(N, DataPoint(D, -1, X));
-		for(int n = 0; n < N; n++) obj_X[n] = DataPoint(D, n, X + n * D);
-		tree->create(obj_X);
+		// Initialize some variables for binary search
+		bool found = false;
+		double beta = 1.0;
+		double min_beta = -DBL_MAX;
+		double max_beta =  DBL_MAX;
+		double tol = 1e-5;
 
-		// Loop over all points to find nearest neighbors
-		printf("Building tree...\n");
-		vector<DataPoint> indices;
-		vector<double> distances;
-		if (perplexity >0 ) {
-			printf("Calculating dynamic kernels using perplexity \n");
-		}else {
-			printf("Using sigma= %lf", sigma);
-		}
-		for(int n = 0; n < N; n++) {
+		// Iterate until we found a good perplexity
+		int iter = 0; double sum_P;
+		while(!found && iter < 200) {
 
-			if(n % 10000 == 0) printf(" - point %d of %d\n", n, N);
+			// Compute Gaussian kernel row
+			for(int m = 0; m < K; m++) cur_P[m] = exp(-beta * distances[m + 1] * distances[m + 1]);
 
-			// Find nearest neighbors
-			indices.clear();
-			distances.clear();
-			tree->search(obj_X[n], K + 1, &indices, &distances);
+			// Compute entropy of current row
+			sum_P = DBL_MIN;
+			for(int m = 0; m < K; m++) sum_P += cur_P[m];
+			double H = .0;
+			for(int m = 0; m < K; m++) H += beta * (distances[m + 1] * distances[m + 1] * cur_P[m]);
+			H = (H / sum_P) + log(sum_P);
 
-			// Initialize some variables for binary search
-			bool found = false;
-			double beta = 1.0;
-			double min_beta = -DBL_MAX;
-			double max_beta =  DBL_MAX;
-			double tol = 1e-5;
-
-			// Iterate until we found a good perplexity
-			int iter = 0; double sum_P;
-			if (perplexity > 0) {
-				while(!found && iter < 200) {
-
-					// Compute Gaussian kernel row
-					for(int m = 0; m < K; m++) cur_P[m] = exp(-beta * distances[m + 1] * distances[m + 1]);
-
-					// Compute entropy of current row
-					sum_P = DBL_MIN;
-					for(int m = 0; m < K; m++) sum_P += cur_P[m];
-					double H = .0;
-					for(int m = 0; m < K; m++) H += beta * (distances[m + 1] * distances[m + 1] * cur_P[m]);
-					H = (H / sum_P) + log(sum_P);
-
-					// Evaluate whether the entropy is within the tolerance level
-					double Hdiff = H - log(perplexity);
-					if(Hdiff < tol && -Hdiff < tol) {
-						found = true;
-						if(n % 10000 == 0) printf(" - point %d of %d, most recent beta calculated is %lf \n", n, N, beta);
-
-					}
-					else {
-						if(Hdiff > 0) {
-							min_beta = beta;
-							if(max_beta == DBL_MAX || max_beta == -DBL_MAX)
-								beta *= 2.0;
-							else
-								beta = (beta + max_beta) / 2.0;
-						}
-						else {
-							max_beta = beta;
-							if(min_beta == -DBL_MAX || min_beta == DBL_MAX)
-								beta /= 2.0;
-							else
-								beta = (beta + min_beta) / 2.0;
-						}
-					}
-
-					// Update iteration counter
-					iter++;
+			// Evaluate whether the entropy is within the tolerance level
+			double Hdiff = H - log(perplexity);
+			if(Hdiff < tol && -Hdiff < tol) {
+				found = true;
+			}
+			else {
+				if(Hdiff > 0) {
+					min_beta = beta;
+					if(max_beta == DBL_MAX || max_beta == -DBL_MAX)
+						beta *= 2.0;
+					else
+						beta = (beta + max_beta) / 2.0;
 				}
-			}else{
-				beta = 1/sigma;
-				//printf("Beta is %lf\n", beta);
-				for(int m = 0; m < K; m++) cur_P[m] = exp(-beta * distances[m + 1] * distances[m + 1]);
-
-				// Compute entropy of current row
-				sum_P = DBL_MIN;
-				for(int m = 0; m < K; m++) sum_P += cur_P[m];
+				else {
+					max_beta = beta;
+					if(min_beta == -DBL_MAX || min_beta == DBL_MAX)
+						beta /= 2.0;
+					else
+						beta = (beta + min_beta) / 2.0;
+				}
 			}
 
-			// Row-normalize current row of P and store in matrix
-			for(unsigned int m = 0; m < K; m++) cur_P[m] /= sum_P;
-			for(unsigned int m = 0; m < K; m++) {
-				col_P[row_P[n] + m] = (unsigned int) indices[m + 1].index();
-				val_P[row_P[n] + m] = cur_P[m];
-			}
-			//	printf("Using this perplexity, learned a sqrt(beta) of %lf, sqrt(1/beta) = %lf \n", sqrt(beta), sqrt(1/beta));
+			// Update iteration counter
+			iter++;
 		}
 
-		// Clean up memory
-		obj_X.clear();
-		free(cur_P);
-
-
-		/*
-		FILE *h;
-		if((h = fopen("temp/val_P.dat", "w+b")) == NULL) {
-			printf("Error: could not open data file.\n");
-			return;
+		// Row-normalize current row of P and store in matrix
+		for(unsigned int m = 0; m < K; m++) cur_P[m] /= sum_P;
+		for(unsigned int m = 0; m < K; m++) {
+			col_P[row_P[n] + m] = (unsigned int) indices[m + 1].index();
+			val_P[row_P[n] + m] = cur_P[m];
 		}
-		fwrite(val_P, sizeof(double), N * K, h);
-		fclose(h);
-
-		if((h = fopen("temp/col_P.dat", "w+b")) == NULL) {
-			printf("Error: could not open data file.\n");
-			return;
-		}
-		fwrite(col_P, sizeof(unsigned int), N * K, h);
-		fclose(h);
-
-		if((h = fopen("temp/row_P.dat", "w+b")) == NULL) {
-			printf("Error: could not open data file.\n");
-			return;
-		}
-		fwrite(row_P, sizeof(unsigned int), N +1, h);
-		fclose(h);
-
-		*/
-
-
-
-		delete tree;
 	}
+
+	// Clean up memory
+	obj_X.clear();
+	free(cur_P);
+	delete tree;
 }
 
 
@@ -1546,8 +1443,8 @@ double TSNE::randn() {
 // Function that loads initial data from a t-SNE file
 // Note: this function does a malloc that should be freed elsewhere
 bool TSNE::load_initial_data(double** data ) {
-	int n, d, no_dims,  rand_seed,  max_iter, stop_lying_iter,K, nbody_algo, compexag, no_momentum_during_exag,n_trees,search_k;
-	double theta,  perplexity, sigma, compexagcoeff;
+	int n, d, no_dims,  rand_seed,  max_iter, stop_lying_iter,K, nbody_algo, knn_algo, no_momentum_during_exag,n_trees,search_k;
+	double theta,  perplexity, sigma, early_exag_coeff;
 	// Open file, read first 2 integers, allocate memory, and read the data
 	FILE *h;
 	if((h = fopen("temp/initial_data.dat", "r+b")) == NULL) {
@@ -1565,8 +1462,8 @@ bool TSNE::load_initial_data(double** data ) {
 	fread(&sigma, sizeof(double),1,h);                                       // maximum number of iterations
 	fread(&nbody_algo, sizeof(int),1,h);                                       // maximum number of iterations
 
-	fread(&compexag, sizeof(int),1,h);                                       // maximum number of iterations
-	fread(&compexagcoeff, sizeof(double),1,h);                                       // maximum number of iterations
+	fread(&knn_algo, sizeof(int),1,h);                                       // maximum number of iterations
+	fread(&early_exag_coeff, sizeof(double),1,h);                                       // maximum number of iterations
 	fread(&no_momentum_during_exag, sizeof(int),1,h);                                       // maximum number of iterations
 	fread(&n_trees, sizeof(int),1,h);                                       // maximum number of iterations
 	fread(&search_k, sizeof(int),1,h);                                       // maximum number of iterations
@@ -1583,9 +1480,9 @@ bool TSNE::load_initial_data(double** data ) {
 // Function that loads data from a t-SNE file
 // Note: this function does a malloc that should be freed elsewhere
 bool TSNE::load_data(double** data, int* n, int* d, int* no_dims, double*
-			theta, double* perplexity, int* rand_seed, int* max_iter, int* stop_lying_iter,
-			int * K, double * sigma, int * nbody_algo, int * compexag, double *
-			compexagcoeff, int * no_momentum_during_exag, int * n_trees, int * search_k, int * start_late_exag_iter, double * late_exag_coeff) {
+		theta, double* perplexity, int* rand_seed, int* max_iter, int* stop_lying_iter,
+		int * K, double * sigma, int * nbody_algo, int * knn_algo, double *
+		early_exag_coeff, int * no_momentum_during_exag, int * n_trees, int * search_k, int * start_late_exag_iter, double * late_exag_coeff) {
 
 	FILE *h;
 	if((h = fopen("temp/data.dat", "r+b")) == NULL) {
@@ -1602,8 +1499,8 @@ bool TSNE::load_data(double** data, int* n, int* d, int* no_dims, double*
 	fread(K, sizeof(int),1,h);                                       // maximum number of iterations
 	fread(sigma, sizeof(double),1,h);                                       // maximum number of iterations
 	fread(nbody_algo, sizeof(int),1,h);                                       // maximum number of iterations
-	fread(compexag, sizeof(int),1,h);                                       // maximum number of iterations
-	fread(compexagcoeff, sizeof(double),1,h);                                       // maximum number of iterations
+	fread(knn_algo, sizeof(int),1,h);                                       // maximum number of iterations
+	fread(early_exag_coeff, sizeof(double),1,h);                                       // maximum number of iterations
 	fread(no_momentum_during_exag, sizeof(int),1,h);                                       // maximum number of iterations
 	fread(n_trees, sizeof(int),1,h);                                       // maximum number of iterations
 	fread(search_k, sizeof(int),1,h);                                       // maximum number of iterations
@@ -1617,7 +1514,7 @@ bool TSNE::load_data(double** data, int* n, int* d, int* no_dims, double*
 	fread(*data, sizeof(double), *n * *d, h);                               // the data
 	if(!feof(h)) fread(rand_seed, sizeof(int), 1, h);                       // random seed
 	fclose(h);
-	printf("Read n %d d %d theta %lf perplexity %lf no_dims %d max_iter %d stop_lying_iter %d K %d sigma %lf nbody_algo %d compexag %d compexagcoef %lf.\n",  *n, *d, *theta, *perplexity, *no_dims, *max_iter,*stop_lying_iter, *K, *sigma, *nbody_algo, *compexag, *compexagcoeff);
+	printf("Read n %d d %d theta %lf perplexity %lf no_dims %d max_iter %d stop_lying_iter %d K %d sigma %lf nbody_algo %d knn_algo %d compexagcoef %lf.\n",  *n, *d, *theta, *perplexity, *no_dims, *max_iter,*stop_lying_iter, *K, *sigma, *nbody_algo, *knn_algo, *early_exag_coeff);
 	printf("Read the %i x %i data matrix successfully!\n", *n, *d);
 	return true;
 }
@@ -1646,14 +1543,14 @@ void TSNE::save_data(double* data, int* landmarks, double* costs, int n, int d, 
 int main() {
 
 	// Define some variables
-	int origN, N, D, no_dims, max_iter, stop_lying_iter,  K, nbody_algo, compexag, no_momentum_during_exag,n_trees,search_k, start_late_exag_iter;
-	double   sigma, compexagcoeff, late_exag_coeff;
+	int origN, N, D, no_dims, max_iter, stop_lying_iter,  K, nbody_algo, knn_algo, no_momentum_during_exag,n_trees,search_k, start_late_exag_iter;
+	double   sigma, early_exag_coeff, late_exag_coeff;
 	double perplexity, theta, *data, *initial_data;
 	int rand_seed = 1;
 	TSNE* tsne = new TSNE();
 
 	// Read the parameters and the dataset
-	if(tsne->load_data(&data, &origN, &D, &no_dims, &theta, &perplexity, &rand_seed, &max_iter, &stop_lying_iter, &K, &sigma, &nbody_algo, &compexag, &compexagcoeff, &no_momentum_during_exag, &n_trees, &search_k, &start_late_exag_iter, &late_exag_coeff)) {
+	if(tsne->load_data(&data, &origN, &D, &no_dims, &theta, &perplexity, &rand_seed, &max_iter, &stop_lying_iter, &K, &sigma, &nbody_algo, &knn_algo, &early_exag_coeff, &no_momentum_during_exag, &n_trees, &search_k, &start_late_exag_iter, &late_exag_coeff)) {
 
 		bool no_momentum_during_exag_bool = true;
 		if (no_momentum_during_exag == 0) no_momentum_during_exag_bool = false;
@@ -1680,7 +1577,7 @@ int main() {
 		double initialError;
 		//Always using random initilization.
 		int error_code = 0;
-		error_code = tsne->run(data, N, D, Y, no_dims, perplexity, theta, rand_seed, false, max_iter, stop_lying_iter,250, K, sigma, nbody_algo, compexag, compexagcoeff, &initialError, costs, no_momentum_during_exag_bool, start_late_exag_iter, late_exag_coeff, n_trees,search_k);
+		error_code = tsne->run(data, N, D, Y, no_dims, perplexity, theta, rand_seed, false, max_iter, stop_lying_iter,250, K, sigma, nbody_algo, knn_algo, early_exag_coeff, &initialError, costs, no_momentum_during_exag_bool, start_late_exag_iter, late_exag_coeff, n_trees,search_k);
 		if (error_code <0 ) {
 			exit(error_code);
 		}

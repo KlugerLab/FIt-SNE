@@ -3,9 +3,10 @@ fftRtsne <- function(X,
 		     dims=2, perplexity=30, theta=0.5,
 		     check_duplicates=TRUE,
 		     max_iter=1000,
-		     fmm_not_bh = TRUE,
+		     fft_not_bh = TRUE,
+		     ann_not_vptree = TRUE,
 		     stop_lying_iter=250,
-		     exaggeration_factor=12.0, no_momentum_during_exag=TRUE,
+		     exaggeration_factor=12.0, no_momentum_during_exag=FALSE,
 		     start_late_exag_iter=-1.0,late_exag_coeff=1.0,
 		     n_trees=50, search_k = -1, ...) {
 
@@ -20,6 +21,17 @@ fftRtsne <- function(X,
 	if (!is.wholenumber(dims) || dims<=0) { stop("Incorrect dimensionality.")}
 	if (search_k == -1) { search_k = n_trees*perplexity*3 }
 
+	if (fft_not_bh){
+	  nbody_algo = 2;
+	}else{
+	  nbody_algo = 1;
+	}
+	
+	if (ann_not_vptree){
+	  knn_algo = 1;
+	}else{
+	  knn_algo = 2;
+	}
 	tX = c(t(X))
 
 	f <- file("temp/data.dat", "wb")
@@ -34,8 +46,8 @@ fftRtsne <- function(X,
 	writeBin( as.integer(stop_lying_iter),f,size=4)
 	writeBin( as.integer(-1),f,size=4) #K
 	writeBin( as.numeric(-30.0), f,size=8) #sigma
-	writeBin( as.integer(2), f,size=4)  #not barnes hut
-	writeBin( as.integer(2), f,size=4) #compexag
+	writeBin( as.integer(nbody_algo), f,size=4)  #not barnes hut
+	writeBin( as.integer(knn_algo), f,size=4) 
 	writeBin( as.numeric(exaggeration_factor), f,size=8) #compexag
 	writeBin( as.integer(no_momentum_during_exag), f,size=4) 
 	writeBin( as.integer(n_trees), f,size=4) 

@@ -32,7 +32,7 @@ plot_subset = randi(N_clusters,5E3,1);
 
 %%
 
-cd /Users/george/Research_Local/fmmtsne
+cd /Users/george/Research_Local/fast-tsne
 clear opts
 opts.stop_lying_iter = 200;
 opts.compexagcoef = 12;
@@ -43,15 +43,14 @@ opts.start_late_exag_iter = 400;
 opts.late_exag_coeff = 2;
 opts.no_momentum_during_exag =0;
 opts.perplexity = 30;
-opts.nbody_algo = 'bh';
 opts.search_k = 3*opts.perplexity*opts.n_trees;
 tic
 cluster_firstphase = fast_tsne(X_clusters_PCs,opts);
 toc
 
-figure(433)
+figure(434)
 scatter(cluster_firstphase(:,1), cluster_firstphase(:,2),  10, col_clusters, 'filled');
-title('BH t-SNE')
+title('vptree t-SNE')
 colormap(jet)
 %%
 cd /Users/george/Research_Local/fmm_tsne/bh_tsne_original

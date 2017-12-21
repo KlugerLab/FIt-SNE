@@ -34,7 +34,7 @@ opts.start_late_exag_iter = 2E3;
 opts.late_exag_coeff = 2;
 opts.no_momentum_during_exag =0;
 opts.perplexity = 30;
-%opts.nbody_algo = '';
+opts.knn_algo = 'vptree';
 opts.search_k = 3*opts.perplexity*opts.n_trees*5;
 opts.theta = 0.5;
 
