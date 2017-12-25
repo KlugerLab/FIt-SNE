@@ -1,42 +1,41 @@
-function [mappedX, costs, initialError] = fast_tsne(X,  opts, initial_data)
+function [mappedX, costs, initialError] = fast_tsne(X,  opts)
 %FAST_TSNE Runs the C++ implementation of FMM t-SNE
 %
 %   mappedX = fast_tsne(X, opts, initial_data)
 %            X - Input dataset, rows are observations and columns are
 %            variables
-%            initial_data - optional
 %            opts - a struct with the following possible parameters 
 %                   opts.no_dims - dimensionality of the embedding
-%                       (recommended 1 or 2). Default 2.
+%                        Default 2.
 %                   opts.perplexity - perplexity is used to determine the
 %                       bandwidth of the Gaussian kernel in the input
 %                       space.  Default 30.
 %                   opts.theta - Set to 0 for exact.  If non-zero, then will use either
-%                       Barnes Hut or FMM based on opts.nbody_algo.  If Barnes Hut, then
+%                       Barnes Hut or FIt-SNE based on opts.nbody_algo.  If Barnes Hut, then
 %                       this determins the accuracy of BH approximation.
 %                       Default 0.5.
 %                   opts.max_iter - Number of iterations of t-SNE to run.
 %                       Default 1000.
 %                   opts.nbody_algo - if theta is nonzero, this determins whether to
-%                        use FMM or Barnes Hut approximation. 'bh' for
-%                        Barnes Hut and 'fmm' for FMM. Default 'fmm'
+%                        use FIt-SNE or Barnes Hut approximation. Default is FIt-SNE.
+%                        set to be 'bh' for Barnes Hut
 %                   opts.early_exag_coeff - coefficient for early exaggeration
 %                       (>1). Default 12.
-%                   opts.stop_lying_iter - When to switch off early exaggeration or
-%                       compression.  Default 200.
+%                   opts.stop_lying_iter - When to switch off early exaggeration.
+%                       Default 200.
+%                   opts.start_late_exag_iter - When to start late
+%                       exaggeration. set to -1 to not use late exaggeration
+%                       Default -1.
+%                   opts.late_exag_coeff - Late exaggeration coefficient.
+%                      Set to -1 to not use late exaggeration.
+%                       Default -1
+%                   opts.no_momentum_during_exag - Set to 0 to use momentum
+%                       and other optimization tricks. 1 to do plain,vanilla
+%                       gradient descent (useful for testing large exaggeration
+%                       coefficients)
 
-% Runs the C++ implementation of fast t-SNE. The high-dimensional 
-% datapoints are specified in the NxD matrix X.  t-SNE reduces the points to no_dims
-% dimensions. The perplexity of the input similarities may be specified
-% through the perplexity variable (default = 30). When using the Barnes-Hut algorithm, the variable theta sets
-% the trade-off parameter between speed and accuracy: theta = 0 corresponds
-% to standard, slow t-SNE, while theta = 1 makes very crude approximations.
-% Appropriate values for theta are between 0.1 and 0.7 (default = 0.5).
-% The function returns the two-dimensional data points in mappedX.
-%
-% NOTE: The function is designed to run on large (N > 5000) data sets. It
-% may give poor performance on very small data sets (it is better to use a
-% standard t-SNE implementation on such data).
+% Runs the C++ implementation of fast t-SNE using either the IFt-SNE
+% implementation or Barnes Hut
 
 
 % Copyright (c) 2014, Laurens van der Maaten (Delft University of Technology)
@@ -66,10 +65,8 @@ function [mappedX, costs, initialError] = fast_tsne(X,  opts, initial_data)
 % CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING 
 % IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY 
 % OF SUCH DAMAGE.
-    if (nargin > 2)
-        given_init = true;
-    else
-        given_init = false;
+    if (nargin == 1)
+        opts.perplexity = 30;
     end
     if (~isfield(opts, 'perplexity'))
         perplexity = 30;
@@ -152,7 +149,7 @@ function [mappedX, costs, initialError] = fast_tsne(X,  opts, initial_data)
         n_trees = opts.n_trees;
     end
     if (~isfield(opts, 'search_k'))
-        search_k = 5;
+        search_k = 3*perplexity*n_trees;
     else
         search_k = opts.search_k;
     end
@@ -172,9 +169,7 @@ function [mappedX, costs, initialError] = fast_tsne(X,  opts, initial_data)
 
     % Run the fast diffusion SNE implementation
     write_data('temp/data.dat',X, no_dims, theta, perplexity, max_iter, stop_lying_iter, K, sigma, nbody_algo,no_momentum_during_exag, knn_algo, early_exag_coeff,n_trees, search_k,start_late_exag_iter, late_exag_coeff);
-    if (given_init)
-       % write_data('temp/initial_data.dat',initial_data, no_dims, theta, perplexity, max_iter, stop_lying_iter, K,sigma, nbody_algo, no_momentum_during_exag,knn_algo, early_exag_coeff, n_trees, search_k);
-    end
+
     disp('Data written');
     tic
     [flag, cmdout] = system(fullfile(tsne_path,'/fast_tsne'), '-echo')
@@ -183,8 +178,8 @@ function [mappedX, costs, initialError] = fast_tsne(X,  opts, initial_data)
     end
     toc
     [mappedX, landmarks, costs, initialError] = read_data(max_iter);   
-   % delete('temp/data.dat');
-   % delete('temp/result.dat');
+    delete('temp/data.dat');
+    delete('temp/result.dat');
 end
 
 
