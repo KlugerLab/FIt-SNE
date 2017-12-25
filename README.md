@@ -19,3 +19,5 @@ And you're good to go! Check out `examples/` for usage
 ## References
 If you use our software, please cite:
 
+George C. Linderman, Manas Rachh, Jeremy G. Hoskins, Stefan Steinerberger, Yuval Kluger. (2017). Efficient Algorithms for t-distributed Stochastic Neighborhood Embedding. arXiv preprint.
+
