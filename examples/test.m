@@ -28,6 +28,7 @@ opts.stop_lying_iter = 2E2;
 opts.max_iter = 400;
 opts.start_late_exag_iter = 300;
 opts.late_exag_coeff = 6;
+opts.rand_seed = -1;
 
 cluster_firstphase = fast_tsne(X_clusters,opts);
 

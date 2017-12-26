@@ -1546,7 +1546,7 @@ int main() {
 	int origN, N, D, no_dims, max_iter, stop_lying_iter,  K, nbody_algo, knn_algo, no_momentum_during_exag,n_trees,search_k, start_late_exag_iter;
 	double   sigma, early_exag_coeff, late_exag_coeff;
 	double perplexity, theta, *data, *initial_data;
-	int rand_seed = 1;
+	int rand_seed;
 	TSNE* tsne = new TSNE();
 
 	// Read the parameters and the dataset

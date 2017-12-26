@@ -117,6 +117,12 @@ function [mappedX, costs, initialError] = fast_tsne(X,  opts)
         late_exag_coeff = opts.late_exag_coeff;
     end
     
+    if (~isfield(opts, 'rand_seed'))
+        rand_seed = -1;
+    else
+        rand_seed = opts.rand_seed;
+    end
+    
     if (~isfield(opts, 'nbody_algo'))
         nbody_algo = 2; %default is fmm
     else
@@ -168,7 +174,7 @@ function [mappedX, costs, initialError] = fast_tsne(X,  opts)
     end
 
     % Run the fast diffusion SNE implementation
-    write_data('temp/data.dat',X, no_dims, theta, perplexity, max_iter, stop_lying_iter, K, sigma, nbody_algo,no_momentum_during_exag, knn_algo, early_exag_coeff,n_trees, search_k,start_late_exag_iter, late_exag_coeff);
+    write_data('temp/data.dat',X, no_dims, theta, perplexity, max_iter, stop_lying_iter, K, sigma, nbody_algo,no_momentum_during_exag, knn_algo, early_exag_coeff,n_trees, search_k,start_late_exag_iter, late_exag_coeff,rand_seed);
 
     disp('Data written');
     tic
@@ -184,7 +190,7 @@ end
 
 
 % Writes the datafile for the fast t-SNE implementation
-function write_data(filename, X, no_dims, theta, perplexity, max_iter, stop_lying_iter,K, sigma, nbody_algo,no_momentum_during_exag, knn_algo, early_exag_coeff,n_trees, search_k,start_late_exag_iter, late_exag_coeff)
+function write_data(filename, X, no_dims, theta, perplexity, max_iter, stop_lying_iter,K, sigma, nbody_algo,no_momentum_during_exag, knn_algo, early_exag_coeff,n_trees, search_k,start_late_exag_iter, late_exag_coeff,rand_seed)
     [n, d] = size(X);
     %h = fopen('data.dat', 'wb');
     h = fopen(filename, 'wb');
@@ -208,7 +214,7 @@ function write_data(filename, X, no_dims, theta, perplexity, max_iter, stop_lyin
 
     
     fwrite(h, X', 'double');
-        fwrite(h, 1, 'integer*4'); %rand seed but it's not really read
+        fwrite(h, rand_seed, 'integer*4');
 
 	fclose(h);
 end
