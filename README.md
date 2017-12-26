@@ -21,3 +21,6 @@ If you use our software, please cite:
 
 George C. Linderman, Manas Rachh, Jeremy G. Hoskins, Stefan Steinerberger, Yuval Kluger. (2017). Efficient Algorithms for t-distributed Stochastic Neighborhood Embedding. arXiv preprint.
 
+Our implementation is derived from the Barnes-Hut implmentation:
+
+Laurens van der Maaten (2014). Accelerating t-SNE using tree-based algorithms. Journal of Machine Learning Research, 15(1):3221–3245.
