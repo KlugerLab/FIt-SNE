@@ -193,6 +193,9 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 
 			}else{
 				printf("Invalid knn_algo param\n");
+				free(dY);
+				free(uY);
+				free(gains);
 				exit(1);
 			}
 		}
@@ -433,7 +436,6 @@ void TSNE::computeFftGradientOneD(double* P, unsigned int* inp_row_P, unsigned i
 	for (unsigned long i = 0; i < N; i++) {
 		//printf("loc: %f, %f, %f, %f\n", locs[i], chargesQij[i], chargesQij[1*N+i], chargesQij[2*N+i]);
 	}
-	double * pot = (double*) calloc(N*ndim, sizeof(double));
 	clock_t begin = clock();
 	double * band = (double *) calloc(N,sizeof(double));
 	kerneltype kernel = &cauchy;
@@ -447,7 +449,7 @@ void TSNE::computeFftGradientOneD(double* P, unsigned int* inp_row_P, unsigned i
 
 	precompute(rmin, rmax,nboxes, nterms, &cauchy, band,boxl, boxr,  prods, xpts, xptsall,zkvalf );
 	nbodyfft(N,ndim,locs,chargesQij, nboxes, nterms,boxl, boxr,  prods, xpts, xptsall,zkvalf,potentialQij);
-	free(pot); free(band); free(boxl); free(boxr); free(prods); free(xpts); free(xptsall);
+	free(band); free(boxl); free(boxr); free(prods); free(xpts); free(xptsall);
 	fftw_free(zkvalf);
 
 	double zSum = 0;
@@ -513,8 +515,8 @@ void TSNE::computeFftGradientOneD(double* P, unsigned int* inp_row_P, unsigned i
 
 	free(potentialQij); 
 	free(locs); 
-	delete pos_f;
-	delete neg_f;
+	delete[] pos_f;
+	delete[] neg_f;
 
 	free(chargesQij); chargesQij = NULL;
 }
@@ -666,8 +668,8 @@ void TSNE::computeFftGradient(double* P, unsigned int* inp_row_P, unsigned int* 
 
 	delete[] pos_f;
 	delete[] neg_f;
-	delete[] potentialQij; 
-	delete[] chargesQij; 
+	free(potentialQij); 
+	free(chargesQij); 
 
 	free(xs); free(ys);free(band);
 	free(boxl); free (boxr); free(prods); free(xpts); free(xptsall);
@@ -783,6 +785,7 @@ void TSNE::computeExactGradient(double* P, double* Y, int N, int D, double* dC) 
 		nD += D;
 	}
 	fclose(fp);
+	free(Q);
 
 }
 
@@ -1359,7 +1362,7 @@ void TSNE::symmetrizeMatrix(unsigned int** _row_P, unsigned int** _col_P, double
 			}
 
 			// Update offsets
-			if(!present || (present && n <= col_P[i])) {
+			if(!present || (n <= col_P[i])) {
 				offset[n]++;
 				if(col_P[i] != n) offset[col_P[i]]++;
 			}
@@ -1437,7 +1440,6 @@ double TSNE::randn() {
 	} while((radius >= 1.0) || (radius == 0.0));
 	radius = sqrt(-2 * log(radius) / radius);
 	x *= radius;
-	y *= radius;
 	return x;
 }
 // Function that loads initial data from a t-SNE file

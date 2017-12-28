@@ -474,6 +474,7 @@ int nbodyfft2(int n, int ndim, double* xs, double *ys, double * charges, int nla
 	free(boxcount); free(boxcounti); free(boxsort); free(iarr); free(chargessort);
 	free(boxoffset); free(ydiff); free(yprods);free(svalsx);free(svalsy);free(mpol); free(loc);
 	free(pot);
+	free(xsort); free(ysort); free(xsp); free(ysp);
 
 	return 1;
 
