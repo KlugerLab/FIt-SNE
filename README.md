@@ -10,6 +10,8 @@ ts
 
 Check out our [preprint](https://arxiv.org/abs/1712.09005) for more details and some benchmarks.
 
+R and Matlab wrappers are `fast_tsne.R` and `fast_tsne.m` respectively. [Gioele La Manno](https://twitter.com/GioeleLaManno) implemented a Python (Cython) wrapper, which is available on PyPI [here](https://pypi.python.org/pypi/fitsne).
+
 ## Installation
 Note that the code has been tested for OS X and Linux, but not for Windows.
 The only prerequisite is [FFTW](http://www.fftw.org/), which can be downloaded and installed from the website. Then, from the root directory compile the code as:
