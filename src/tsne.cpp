@@ -88,7 +88,8 @@ void print_progress ( int iter, double * Y, int N, int no_dims){
 int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity, double theta, int rand_seed,
 		bool skip_random_init, int max_iter, int stop_lying_iter, 
 		int mom_switch_iter, int K, double sigma, int nbody_algo, int knn_algo, double early_exag_coeff,double * initialError, double * costs, bool no_momentum_during_exag,
-		int start_late_exag_iter, double late_exag_coeff, int n_trees,int search_k) {
+		int start_late_exag_iter, double late_exag_coeff, int n_trees,int search_k,
+		int nterms, double intervals_per_integer, int min_num_intervals) {
 
 	// Set random seed
 	if (skip_random_init != true) {
@@ -130,8 +131,8 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 	for(int i = 0; i < N * no_dims; i++) gains[i] = 1.0;
 
 	printf("Computing input similarities...\n");
-	struct timespec start_timespec, finish_timespec;
-	clock_gettime(CLOCK_MONOTONIC, &start_timespec);
+	//struct timespec start_timespec, finish_timespec;
+	//clock_gettime(CLOCK_MONOTONIC, &start_timespec);
 	zeroMean(X, N, D);
 	if (perplexity >0) {
 		printf( "Using perplexity, so normalize input data (to prevent numerical problems)\n");
@@ -211,7 +212,7 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 
 	// Initialize solution (randomly)
 	if (skip_random_init != true) {
-		printf("Initializing the solution");
+		printf("Initializing the solution\n");
 		for(int i = 0; i < N * no_dims; i++) Y[i] = randn() * .0001;
 	}else{
 		printf("Using the given initialization\n");
@@ -248,16 +249,16 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 
 	// Perform main training loop
 
-	clock_gettime(CLOCK_MONOTONIC, &finish_timespec);
-	double elapsed_input = (finish_timespec.tv_sec - start_timespec.tv_sec);
+	//clock_gettime(CLOCK_MONOTONIC, &finish_timespec);
+	//double elapsed_input = (finish_timespec.tv_sec - start_timespec.tv_sec);
 
-	if(exact) printf("Input similarities computed in %lf seconds!\nLearning embedding...\n",  elapsed_input);
-	else printf("Input similarities computed in %4.2f seconds (sparsity = %f)!\nLearning embedding...\n", (float) elapsed_input, (double) row_P[N] / ((double) N * (double) N));
+	if(exact) printf("Input similarities computed \nLearning embedding...\n");
+	else printf("Input similarities computed (sparsity = %f)!\nLearning embedding...\n", (double) row_P[N] / ((double) N * (double) N));
 
 	start = clock();
 	if (!exact) {
 		if (nbody_algo == 2) {
-			printf("Using FFT approximation.\n");
+			printf("Using FIt-SNE approximation.\n");
 		}else if(nbody_algo == 1) {
 			printf("Using the Barnes Hut approximation.\n");
 		}else{
@@ -273,9 +274,9 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 		}else{
 			if (nbody_algo == 2) {
 				if (no_dims == 1){
-					computeFftGradientOneD(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta);
+					computeFftGradientOneD(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta,nterms,intervals_per_integer, min_num_intervals);
 				}else{
-					computeFftGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta);
+					computeFftGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta,nterms,intervals_per_integer, min_num_intervals);
 				}
 			}else if(nbody_algo == 1) {
 				computeGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta);
@@ -283,7 +284,7 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 		}
 		if (measure_accuracy){
 			computeGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta);
-			computeFftGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta);
+			computeFftGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta,nterms,intervals_per_integer, min_num_intervals);
 			computeExactGradientTest(Y, N, no_dims);
 		}
 
@@ -404,13 +405,12 @@ void TSNE::computeGradient(double* P, unsigned int* inp_row_P, unsigned int* inp
 	delete tree;
 }
 
-void TSNE::computeFftGradientOneD(double* P, unsigned int* inp_row_P, unsigned int* inp_col_P, double* inp_val_P, double* Y, int N, int D, double* dC, double theta) {
+void TSNE::computeFftGradientOneD(double* P, unsigned int* inp_row_P, unsigned int* inp_col_P, double* inp_val_P, double* Y, int N, int D, double* dC, double theta, int  nterms, double  intervals_per_integer, int min_num_intervals) {
 	//Zero out the gradient
 	for(int i = 0; i < N * D; i++){
 		dC[i] = 0.0;
 	}
 
-	unsigned short nterms   =   3; // Number of Chebyshev nodes per dimension; 
 	int ndim = 3; //Number of sets of charges.
 
 	double * locs =(double*) malloc(N* sizeof(double));
@@ -426,7 +426,8 @@ void TSNE::computeFftGradientOneD(double* P, unsigned int* inp_row_P, unsigned i
 		if (Y[i] < rmin) rmin = Y[i];
 		if (Y[i] > rmax) rmax = Y[i];
 	}
-	int nboxes =fmax(50, (rmax-rmin));
+	int nboxes =fmax(min_num_intervals, (rmax-rmin)/(double) intervals_per_integer);
+	//printf("%d nodes, from %lf to %lf, so using nboxes=%d\n",nterms, rmin, rmax, nboxes);
 
 	for (unsigned long j = 0; j < N; j++) {
 		chargesQij[j] =  1;
@@ -522,7 +523,7 @@ void TSNE::computeFftGradientOneD(double* P, unsigned int* inp_row_P, unsigned i
 }
 
 // Compute gradient of the t-SNE cost function (using FFT)
-void TSNE::computeFftGradient(double* P, unsigned int* inp_row_P, unsigned int* inp_col_P, double* inp_val_P, double* Y, int N, int D, double* dC, double theta) {
+void TSNE::computeFftGradient(double* P, unsigned int* inp_row_P, unsigned int* inp_col_P, double* inp_val_P, double* Y, int N, int D, double* dC, double theta, int  nterms, double  intervals_per_integer, int min_num_intervals) {
 	//clock_t startTime;
 	//Zero out the gradient
 	for(int i = 0; i < N * D; i++){
@@ -556,10 +557,9 @@ void TSNE::computeFftGradient(double* P, unsigned int* inp_row_P, unsigned int* 
 		chargesQij[3*N+j] = Y[j*2]*Y[j*2] +  Y[j*2 +1 ]*Y[j*2+1];
 	} 
 
-	int nlat =fmax(50, (maxloc-minloc));
-	//printf("From %lf to %lf, so using nlat=%d\n",minloc, maxloc, nlat);
+	int nlat =fmax(min_num_intervals, (maxloc-minloc)/(double) intervals_per_integer);
+//	printf("%d nodes, from %lf to %lf, so using nlat=%d\n",nterms, minloc, maxloc, nlat);
 	int nboxes = nlat*nlat;
-	int nterms = 3;
 
 
 	double * band = (double *) calloc(N,sizeof(double));
@@ -1020,14 +1020,11 @@ int TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row
 
 			tree.add_item(i, vec);
 		}
-		printf("Finished adding...\n");
-
 		tree.build(num_trees);
 
 
-
 		//End annoy
-		printf("Done building Annoy tree...\n");
+		printf("Done building Annoy tree. Begin nearest neighbor search... \n");
 
 		if (perplexity >0 ) {
 			printf("Calculating dynamic kernels using perplexity \n");
@@ -1046,9 +1043,6 @@ int TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row
 			}
 		}
 
-		// Parallel version
-		// number of threads
-		double time_spents3 = 0;
 		const size_t nthreads = std::thread::hardware_concurrency();
 		//const size_t nthreads = 1;
 		{
@@ -1444,6 +1438,7 @@ double TSNE::randn() {
 }
 // Function that loads initial data from a t-SNE file
 // Note: this function does a malloc that should be freed elsewhere
+/*
 bool TSNE::load_initial_data(double** data ) {
 	int n, d, no_dims,  rand_seed,  max_iter, stop_lying_iter,K, nbody_algo, knn_algo, no_momentum_during_exag,n_trees,search_k;
 	double theta,  perplexity, sigma, early_exag_coeff;
@@ -1478,13 +1473,15 @@ bool TSNE::load_initial_data(double** data ) {
 	printf("Read the %i x %i data matrix successfully!\n", n, d);
 	return true;
 }
+*/
 
 // Function that loads data from a t-SNE file
 // Note: this function does a malloc that should be freed elsewhere
 bool TSNE::load_data(double** data, int* n, int* d, int* no_dims, double*
 		theta, double* perplexity, int* rand_seed, int* max_iter, int* stop_lying_iter,
 		int * K, double * sigma, int * nbody_algo, int * knn_algo, double *
-		early_exag_coeff, int * no_momentum_during_exag, int * n_trees, int * search_k, int * start_late_exag_iter, double * late_exag_coeff) {
+		early_exag_coeff, int * no_momentum_during_exag, int * n_trees, int * search_k, int * start_late_exag_iter, double * late_exag_coeff,
+		int * nterms, double * intervals_per_integer, int *min_num_intervals) {
 
 	FILE *h;
 	if((h = fopen("temp/data.dat", "r+b")) == NULL) {
@@ -1497,17 +1494,21 @@ bool TSNE::load_data(double** data, int* n, int* d, int* no_dims, double*
 	fread(perplexity, sizeof(double), 1, h);								// perplexity
 	fread(no_dims, sizeof(int), 1, h);                                      // output dimensionality
 	fread(max_iter, sizeof(int),1,h);                                       // maximum number of iterations
-	fread(stop_lying_iter, sizeof(int),1,h);                                       // maximum number of iterations
-	fread(K, sizeof(int),1,h);                                       // maximum number of iterations
-	fread(sigma, sizeof(double),1,h);                                       // maximum number of iterations
-	fread(nbody_algo, sizeof(int),1,h);                                       // maximum number of iterations
-	fread(knn_algo, sizeof(int),1,h);                                       // maximum number of iterations
-	fread(early_exag_coeff, sizeof(double),1,h);                                       // maximum number of iterations
-	fread(no_momentum_during_exag, sizeof(int),1,h);                                       // maximum number of iterations
-	fread(n_trees, sizeof(int),1,h);                                       // maximum number of iterations
-	fread(search_k, sizeof(int),1,h);                                       // maximum number of iterations
-	fread(start_late_exag_iter, sizeof(int),1,h);                                       // maximum number of iterations
-	fread(late_exag_coeff, sizeof(double),1,h);                                       // maximum number of iterations
+	fread(stop_lying_iter, sizeof(int),1,h);         
+	fread(K, sizeof(int),1,h);                       
+	fread(sigma, sizeof(double),1,h);                
+	fread(nbody_algo, sizeof(int),1,h);              
+	fread(knn_algo, sizeof(int),1,h);                
+	fread(early_exag_coeff, sizeof(double),1,h);     
+	fread(no_momentum_during_exag, sizeof(int),1,h); 
+	fread(n_trees, sizeof(int),1,h);                 
+	fread(search_k, sizeof(int),1,h);                
+	fread(start_late_exag_iter, sizeof(int),1,h);    
+	fread(late_exag_coeff, sizeof(double),1,h);      
+
+	fread(nterms, sizeof(int),1,h);    
+	fread(intervals_per_integer, sizeof(double),1,h);      
+	fread(min_num_intervals, sizeof(int),1,h);    
 
 
 
@@ -1516,7 +1517,16 @@ bool TSNE::load_data(double** data, int* n, int* d, int* no_dims, double*
 	fread(*data, sizeof(double), *n * *d, h);                               // the data
 	if(!feof(h)) fread(rand_seed, sizeof(int), 1, h);                       // random seed
 	fclose(h);
-	printf("Read n %d d %d theta %lf perplexity %lf no_dims %d max_iter %d stop_lying_iter %d K %d sigma %lf nbody_algo %d knn_algo %d compexagcoef %lf.\n",  *n, *d, *theta, *perplexity, *no_dims, *max_iter,*stop_lying_iter, *K, *sigma, *nbody_algo, *knn_algo, *early_exag_coeff);
+	printf("Read the following parameters:\n\t n %d by d %d dataset, theta %lf\n"
+			"\t perplexity %lf, no_dims %d, max_iter %d,  stop_lying_iter %d\n"
+			"\t K %d, sigma %lf, nbody_algo %d, knn_algo %d, compexagcoef %lf\n"
+			"\t no_momentum_during_exag %d, n_trees %d, search_k %d, start_late_exag_iter %d, late_exag_coeff %lf\n"
+			"\t nterms %d, interval_per_integer %lf, min_num_intervals %d\n",  
+			*n, *d, *theta, *perplexity, 
+			*no_dims, *max_iter,*stop_lying_iter, 
+			*K, *sigma, *nbody_algo, *knn_algo, *early_exag_coeff,
+			*no_momentum_during_exag, *n_trees, *search_k, *start_late_exag_iter, *late_exag_coeff,
+			*nterms, *intervals_per_integer, *min_num_intervals);
 	printf("Read the %i x %i data matrix successfully!\n", *n, *d);
 	return true;
 }
@@ -1548,11 +1558,19 @@ int main() {
 	int origN, N, D, no_dims, max_iter, stop_lying_iter,  K, nbody_algo, knn_algo, no_momentum_during_exag,n_trees,search_k, start_late_exag_iter;
 	double   sigma, early_exag_coeff, late_exag_coeff;
 	double perplexity, theta, *data, *initial_data;
+	int nterms, min_num_intervals;
+	double intervals_per_integer;
 	int rand_seed;
 	TSNE* tsne = new TSNE();
 
 	// Read the parameters and the dataset
-	if(tsne->load_data(&data, &origN, &D, &no_dims, &theta, &perplexity, &rand_seed, &max_iter, &stop_lying_iter, &K, &sigma, &nbody_algo, &knn_algo, &early_exag_coeff, &no_momentum_during_exag, &n_trees, &search_k, &start_late_exag_iter, &late_exag_coeff)) {
+	if(tsne->load_data(&data, &origN, &D, &no_dims, &theta, &perplexity,
+				&rand_seed, &max_iter, &stop_lying_iter, &K,
+				&sigma, &nbody_algo, &knn_algo,
+				&early_exag_coeff, &no_momentum_during_exag,
+				&n_trees, &search_k, &start_late_exag_iter,
+				&late_exag_coeff,
+				&nterms, &intervals_per_integer, &min_num_intervals)) {
 
 		bool no_momentum_during_exag_bool = true;
 		if (no_momentum_during_exag == 0) no_momentum_during_exag_bool = false;
@@ -1579,7 +1597,7 @@ int main() {
 		double initialError;
 		//Always using random initilization.
 		int error_code = 0;
-		error_code = tsne->run(data, N, D, Y, no_dims, perplexity, theta, rand_seed, false, max_iter, stop_lying_iter,250, K, sigma, nbody_algo, knn_algo, early_exag_coeff, &initialError, costs, no_momentum_during_exag_bool, start_late_exag_iter, late_exag_coeff, n_trees,search_k);
+		error_code = tsne->run(data, N, D, Y, no_dims, perplexity, theta, rand_seed, false, max_iter, stop_lying_iter,250, K, sigma, nbody_algo, knn_algo, early_exag_coeff, &initialError, costs, no_momentum_during_exag_bool, start_late_exag_iter, late_exag_coeff, n_trees,search_k, nterms, intervals_per_integer, min_num_intervals);
 		if (error_code <0 ) {
 			exit(error_code);
 		}

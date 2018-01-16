@@ -5,7 +5,11 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
-int precompute2( double xmax, double xmin, double ymax, double ymin,  int nlat, int nterms, kerneltype2d ker, double * band,double * boxl, double * boxr,  double * prods, double * xpts, double * xptsall, double *yptsall, int * irearr, fftw_complex * zkvalf ) {
+int precompute2( double xmax, double xmin, double ymax, double ymin,  int nlat,
+		int nterms, kerneltype2d ker, double * band,double * boxl,
+		double * boxr,  double * prods, double * xpts, double *
+		xptsall, double *yptsall, int * irearr, fftw_complex * zkvalf )
+{
 
 	/*
 	 * Set up the boxes
@@ -115,16 +119,15 @@ int precompute2( double xmax, double xmin, double ymax, double ymin,  int nlat, 
 	}
 
 	//FFT of the kernel
-	fftw_complex * zkvali = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * nfour*nfour);
+	double * zkvali = (double*) fftw_malloc(sizeof(double) * nfour*nfour);
 	fftw_plan p;
-	p = fftw_plan_dft_2d(nfour,nfour, zkvali, zkvalf, FFTW_FORWARD, FFTW_ESTIMATE);
+	p = fftw_plan_dft_r2c_2d(nfour,nfour, zkvali, zkvalf, FFTW_ESTIMATE);
 	for (int i =0; i< nfour*nfour; i++){
-		zkvali[i][0] =  0;
-		zkvali[i][1] =  0;
+		zkvali[i] =  0;
 	}
 
 	for (int i = 0; i< nfour*nfour; i++){
-		zkvali[i][0] =  zkvals[i];
+		zkvali[i] =  zkvals[i];
 	}
 	fftw_execute(p); 
 
@@ -144,7 +147,10 @@ int precompute2( double xmax, double xmin, double ymax, double ymin,  int nlat, 
 	
 	return 1;
 }
-int nbodyfft2(int n, int ndim, double* xs, double *ys, double * charges, int nlat, int nterms,double *boxl, double *boxr,  double * prods, double * xpts, double * xptsall, double *yptsall,int* irearr, fftw_complex * zkvalf, double * outpot){
+int nbodyfft2(int n, int ndim, double* xs, double *ys, double * charges, int
+		nlat, int nterms,double *boxl, double *boxr,  double * prods,
+		double * xpts, double * xptsall, double *yptsall,int* irearr,
+		fftw_complex * zkvalf, double * outpot){
 	int nboxes = nlat*nlat;
 	int nn = nboxes*nterms*nterms;
 
@@ -164,14 +170,16 @@ int nbodyfft2(int n, int ndim, double* xs, double *ys, double * charges, int nla
 	for (int i=0; i< n; i++){
 		int ixs = (xs[i] - rmin)/boxwidth;
 		int iys = (ys[i] - rmin)/boxwidth;
-		if (ixs > nboxes) {
-			ixs = nboxes - 1;
+		//printf("%lf,%lf\n", rmin, boxwidth);
+		//printf("%d,%d,%d\n", ixs, iys, nboxes);
+		if (ixs >= nlat) {
+			ixs = nlat - 1;
 		}
 		if (ixs < 0) {
 			ixs = 0;
 		}
-		if (iys > nboxes) {
-			iys = nboxes - 1;
+		if (iys >= nlat) {
+			iys = nlat - 1;
 		}
 		if (iys < 0) {
 			iys = 0;
@@ -232,7 +240,7 @@ int nbodyfft2(int n, int ndim, double* xs, double *ys, double * charges, int nla
 	}
 
 	for (int i=0; i<10; i++){
-	//	printf("Charge %d at %f,%f, sorted %f,%f: %f, sorted; %f\n", i, xs[i], ys[i], xsort[i],xsort[i], charges[i], chargessort[0*n+i]);
+//		printf("Charge %d at %f,%f, sorted %f,%f: %f, sorted; %f\n", i, xs[i], ys[i], xsort[i],xsort[i], charges[i], chargessort[0*n+i]);
 	}
 
 
@@ -276,7 +284,7 @@ int nbodyfft2(int n, int ndim, double* xs, double *ys, double * charges, int nla
 			}	
 			if ( fabs(ydiff[j+i*n]) < 1e-6) {
 				svalsx[j+i*n] =  1/prods[i];
-				for (int k =1; k < nterms; k++) {
+				for (int k =0; k < nterms; k++) {
 					if(i != k) {
 						svalsx[j+i*n] = svalsx[j+i*n] *ydiff[j+k*n];
 					}
@@ -308,7 +316,7 @@ int nbodyfft2(int n, int ndim, double* xs, double *ys, double * charges, int nla
 			}	
 			if ( fabs(ydiff[j+i*n]) < 1e-6) {
 				svalsy[j+i*n] =  1/prods[i];
-				for (int k =1; k < nterms; k++) {
+				for (int k =0; k < nterms; k++) {
 					if(i != k) {
 						svalsy[j+i*n] = svalsy[j+i*n] *ydiff[j+k*n];
 					}
@@ -348,9 +356,6 @@ int nbodyfft2(int n, int ndim, double* xs, double *ys, double * charges, int nla
 	int nfourh = nterms*nlat;
 	int nfour = 2*nterms*nlat;
 
-	//fftw_init_threads();
-	//fftw_plan_with_nthreads(2);
-	//fftw_import_wisdom_from_filename("patientmillionwisdom.txt");
 	for (int idim =0; idim< ndim; idim++){
 		double * mpolsort = (double *) calloc(sizeof(double), nn);
 		for (int i =0; i< nn; i++){
@@ -370,32 +375,36 @@ int nbodyfft2(int n, int ndim, double* xs, double *ys, double * charges, int nla
 		}
 
 
-		//clock_t begin = clock();
 		fftw_plan p,p2;
 		//FFT of zmpol
 		//printf("doing %d, by %d\n", nfour, nfour);
-		fftw_complex * zmpoli = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * nfour*nfour);
-		fftw_complex * zmpolf = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * nfour*nfour);
-		p = fftw_plan_dft_2d(nfour,nfour, zmpoli, zmpolf, FFTW_FORWARD, FFTW_ESTIMATE);
-		p2 = fftw_plan_dft_2d(nfour,nfour, zmpolf, zmpolf, FFTW_FORWARD, FFTW_ESTIMATE);
+		//fftw_complex * zmpoli = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * nfour*nfour);
+		//fftw_complex * zmpolf = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * nfour*nfour);
+		//p = fftw_plan_dft_2d(nfour,nfour, zmpoli, zmpolf, FFTW_FORWARD, FFTW_ESTIMATE);
+		//p2 = fftw_plan_dft_2d(nfour,nfour, zmpolf, zmpolf, FFTW_BACKWARD, FFTW_ESTIMATE);
+
+		//fftw_import_wisdom_from_string(wisdom_string);
+
+		double * zmpoli = (double*) fftw_malloc(sizeof(fftw_complex) * nfour*nfour);
+		fftw_complex * zmpolf = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * nfour*(nfour/2 +1));
+		double * zmpolfo = (double*) fftw_malloc(sizeof(fftw_complex) * nfour*nfour);
+		p = fftw_plan_dft_r2c_2d(nfour,nfour, zmpoli, zmpolf, FFTW_ESTIMATE );
+		p2 = fftw_plan_dft_c2r_2d(nfour,nfour, zmpolf, zmpolfo, FFTW_ESTIMATE);
+		//wisdom_string = fftw_export_wisdom_to_string();
+
 
 		for (int i =0; i< nfour*nfour; i++){
-			zmpoli[i][0] =  0;
-			zmpoli[i][1] =  0;
+			zmpoli[i] =  0;
 		}
 		for (int i = 0; i< nfour*nfour; i++){
-			zmpoli[i][0] =  zmpol[i];
+			zmpoli[i] =  zmpol[i];
 		}
 
 		fftw_execute(p); 
-		//fftw_export_wisdom_to_filename("patientmillionwisdom.txt");
 
-//		fftw_destroy_plan(p);
-//		fftw_free(zmpoli);
-//
 		//Take hadamard product
 
-		for (int i =0; i< nfour*nfour; i++){
+		for (int i =0; i< nfour*(nfour/2 +1); i++){
 			//(x_ + y_*i) * (u_ + v_*i) = (x*u - y*v) + (x*v+y*u)i
 			double x_ = zmpolf[i][0];
 			double y_ = zmpolf[i][1];
@@ -421,16 +430,14 @@ int nbodyfft2(int n, int ndim, double* xs, double *ys, double * charges, int nla
 			//printf("\n%d", i+1);
 		//	printf("\n", i+1);
 		}
-	//clock_t end = clock();
-	//double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-	//printf("Per iteration FFTW took:  %.2e seconds, so %.2e per second\n", time_spent, n/time_spent);
 
 		for (int i=0;i<nfourh; i++){
 			for (int j=0;j<nfourh; j++){
 				int ii = i*nfourh+j;
-				int rowval = (nfourh-i);
-				int colval = (nfourh-j);
-				mpolsort[ii] = zmpolf[rowval*nfour+colval][0]/(double)(nfour*nfour);
+				int rowval = (nfourh+i);
+				int colval = (nfourh+j);
+
+				mpolsort[ii] = zmpolfo[rowval*nfour+colval]/(double)(nfour*nfour);
 				//printf("%d row: %d col %d is %lf\n", ii, rowval, colval, mpolsort[ii]);
 			}
 		}
@@ -591,7 +598,7 @@ int nbodyfft(int n, int ndim, double* locs, double * charges, int nboxes, int nt
 	//Initialize the charges and the locations
 	for (int i=0; i< n; i++){
 		int ibox = (locs[i] - rmin)/boxwidth;
-		if (ibox > nboxes) {
+		if (ibox >= nboxes) {
 			ibox = nboxes - 1;
 		}
 		if (ibox < 0) {
@@ -682,7 +689,7 @@ int nbodyfft(int n, int ndim, double* locs, double * charges, int nboxes, int nt
 			}	
 			if ( fabs(ydiff[j+i*n]) < 1e-6) {
 				svals[j+i*n] =  1/prods[i];
-				for (int k =1; k < nterms; k++) {
+				for (int k =0; k < nterms; k++) {
 					if(i != k) {
 						svals[j+i*n] = svals[j+i*n] *ydiff[j+k*n];
 					}
@@ -720,7 +727,6 @@ int nbodyfft(int n, int ndim, double* locs, double * charges, int nboxes, int nt
 	}
 
 
-	//clock_t begin = clock();
 	fftw_plan p;
 	//FFT of zmpol
 	for (int idim =0; idim< ndim; idim++){
@@ -763,8 +769,6 @@ int nbodyfft(int n, int ndim, double* locs, double * charges, int nboxes, int nt
 		}
 		fftw_free(zmpolf);
 	}
-	//clock_t end = clock();
-	//double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
 	//printf("Per iteration FFTW took:  %.2e seconds, so %.2e per second\n", time_spent, n/time_spent);
 
 	double * pot = (double *) calloc(n*ndim,sizeof(double));
