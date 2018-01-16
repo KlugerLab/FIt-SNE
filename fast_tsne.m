@@ -19,6 +19,8 @@ function [mappedX, costs, initialError] = fast_tsne(X,  opts)
 %                   opts.nbody_algo - if theta is nonzero, this determins whether to
 %                        use FIt-SNE or Barnes Hut approximation. Default is FIt-SNE.
 %                        set to be 'bh' for Barnes Hut
+%                   opts.knn_algo - use vp-trees (as in bhtsne) or approximate nearest neighbors (default).
+%                        set to be 'vptree' for vp-trees
 %                   opts.early_exag_coeff - coefficient for early exaggeration
 %                       (>1). Default 12.
 %                   opts.stop_lying_iter - When to switch off early exaggeration.

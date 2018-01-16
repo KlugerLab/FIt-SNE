@@ -130,8 +130,8 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 	for(int i = 0; i < N * no_dims; i++) gains[i] = 1.0;
 
 	printf("Computing input similarities...\n");
-	struct timespec start_timespec, finish_timespec;
-	clock_gettime(CLOCK_MONOTONIC, &start_timespec);
+	//struct timespec start_timespec, finish_timespec;
+	//clock_gettime(CLOCK_MONOTONIC, &start_timespec);
 	zeroMean(X, N, D);
 	if (perplexity >0) {
 		printf( "Using perplexity, so normalize input data (to prevent numerical problems)\n");
@@ -248,11 +248,11 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 
 	// Perform main training loop
 
-	clock_gettime(CLOCK_MONOTONIC, &finish_timespec);
-	double elapsed_input = (finish_timespec.tv_sec - start_timespec.tv_sec);
+	//clock_gettime(CLOCK_MONOTONIC, &finish_timespec);
+	//double elapsed_input = (finish_timespec.tv_sec - start_timespec.tv_sec);
 
-	if(exact) printf("Input similarities computed in %lf seconds!\nLearning embedding...\n",  elapsed_input);
-	else printf("Input similarities computed in %4.2f seconds (sparsity = %f)!\nLearning embedding...\n", (float) elapsed_input, (double) row_P[N] / ((double) N * (double) N));
+	if(exact) printf("Input similarities computed \nLearning embedding...\n");
+	else printf("Input similarities computed (sparsity = %f)!\nLearning embedding...\n", (double) row_P[N] / ((double) N * (double) N));
 
 	start = clock();
 	if (!exact) {
