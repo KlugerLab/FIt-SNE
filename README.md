@@ -17,7 +17,9 @@ The only prerequisite is [FFTW](http://www.fftw.org/), which can be downloaded a
 ```bash
     g++ -std=c++11 -O3  src/sptree.cpp src/tsne.cpp src/nbodyfft.cpp  -o bin/fast_tsne -pthread -lfftw3 -lm
 ```
-And you're good to go! Check out `examples/` for usage
+And you're good to go! Check out `examples/` for usage.
+
+**Note:** If you update to a new version of FIt-SNE using `git pull`, be sure to recompile. 
 
 ## References
 If you use our software, please cite:
