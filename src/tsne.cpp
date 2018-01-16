@@ -1477,14 +1477,14 @@ bool TSNE::load_initial_data(double** data ) {
 
 // Function that loads data from a t-SNE file
 // Note: this function does a malloc that should be freed elsewhere
-bool TSNE::load_data(double** data, int* n, int* d, int* no_dims, double*
+bool TSNE::load_data(const char *data_path, double** data, int* n, int* d, int* no_dims, double*
 		theta, double* perplexity, int* rand_seed, int* max_iter, int* stop_lying_iter,
 		int * K, double * sigma, int * nbody_algo, int * knn_algo, double *
 		early_exag_coeff, int * no_momentum_during_exag, int * n_trees, int * search_k, int * start_late_exag_iter, double * late_exag_coeff,
 		int * nterms, double * intervals_per_integer, int *min_num_intervals) {
 
 	FILE *h;
-	if((h = fopen("temp/data.dat", "r+b")) == NULL) {
+	if((h = fopen(data_path, "r+b")) == NULL) {
 		printf("Error: could not open data file.\n");
 		return false;
 	}
@@ -1532,11 +1532,11 @@ bool TSNE::load_data(double** data, int* n, int* d, int* no_dims, double*
 }
 
 // Function that saves map to a t-SNE file
-void TSNE::save_data(double* data, int* landmarks, double* costs, int n, int d, double initialError) {
+void TSNE::save_data(const char *result_path, double* data, int* landmarks, double* costs, int n, int d, double initialError) {
 
 	// Open file, write first 2 integers and then the data
 	FILE *h;
-	if((h = fopen("temp/result.dat", "w+b")) == NULL) {
+	if((h = fopen(result_path, "w+b")) == NULL) {
 		printf("Error: could not open data file.\n");
 		return;
 	}
@@ -1552,7 +1552,7 @@ void TSNE::save_data(double* data, int* landmarks, double* costs, int n, int d, 
 
 
 // Function that runs the Barnes-Hut implementation of t-SNE
-int main() {
+int main(int argc, char *argv[]) {
 
 	// Define some variables
 	int origN, N, D, no_dims, max_iter, stop_lying_iter,  K, nbody_algo, knn_algo, no_momentum_during_exag,n_trees,search_k, start_late_exag_iter;
@@ -1562,9 +1562,21 @@ int main() {
 	double intervals_per_integer;
 	int rand_seed;
 	TSNE* tsne = new TSNE();
+	const char *data_path, *result_path;
+
+	data_path = "temp/data.dat";
+	result_path = "temp/result.dat";
+	if(argc >= 2) {
+		data_path = argv[1];
+	}
+	if(argc >= 3) {
+		result_path = argv[2];
+	}
+	cout<<"fast_tsne data_path: "<< data_path <<"\n";
+	cout<<"fast_tsne result_path: "<< result_path <<"\n";
 
 	// Read the parameters and the dataset
-	if(tsne->load_data(&data, &origN, &D, &no_dims, &theta, &perplexity,
+	if(tsne->load_data(data_path, &data, &origN, &D, &no_dims, &theta, &perplexity,
 				&rand_seed, &max_iter, &stop_lying_iter, &K,
 				&sigma, &nbody_algo, &knn_algo,
 				&early_exag_coeff, &no_momentum_during_exag,
@@ -1603,7 +1615,7 @@ int main() {
 		}
 
 		// Save the results
-		tsne->save_data(Y, landmarks, costs, N, no_dims, initialError);
+		tsne->save_data(result_path, Y, landmarks, costs, N, no_dims, initialError);
 
 		// Clean up the memory
 		free(data); data = NULL;

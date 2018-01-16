@@ -9,7 +9,21 @@ fftRtsne <- function(X,
 		     exaggeration_factor=12.0, no_momentum_during_exag=FALSE,
 		     start_late_exag_iter=-1.0,late_exag_coeff=1.0,
 		     n_trees=50, search_k = -1,rand_seed=-1,
-		     nterms=3, intervals_per_integer=1, min_num_intervals=50, ...) {
+		     nterms=3, intervals_per_integer=1, min_num_intervals=50, 
+		     data_path=NULL, result_path=NULL,
+		     fast_tsne_path='bin/fast_tsne', ...) {
+	if (is.null(data_path)) {
+		data_path <- tempfile(pattern='fftRtsne_data_', fileext='.dat')
+	}
+	if (is.null(result_path)) {
+		result_path <- tempfile(pattern='fftRtsne_result_', fileext='.dat')
+	}
+	if (is.null(fast_tsne_path)) {
+		fast_tsne_path <- system2('which', 'fast_tsne', stdout=TRUE)
+	}
+	if (!file_test('-x', fast_tsne_path)) {
+		stop(fast_tsne_path, " does not exist or is not executable; check your fast_tsne_path parameter")
+	}
 
 	is.wholenumber <- function(x, tol = .Machine$double.eps^0.5)  abs(x - round(x)) < tol
 
@@ -35,7 +49,7 @@ fftRtsne <- function(X,
 	}
 	tX = c(t(X))
 
-	f <- file("temp/data.dat", "wb")
+	f <- file(data_path, "wb")
 	n = nrow(X);
 	D = ncol(X);
 	writeBin(as.integer(n), f,size= 4)
@@ -64,20 +78,20 @@ fftRtsne <- function(X,
 	writeBin( as.integer(rand_seed), f,size=4) 
 	close(f) 
 
-
-	flag= system('bin/fast_tsne');
+	flag= system2(command=fast_tsne_path, args=c(data_path, result_path));
 	if (flag != 0) {
 		stop('tsne call failed');
 	}
-	f <- file("temp/result.dat", "rb")
+	f <- file(result_path, "rb")
 	initialError <- readBin(f, integer(), n=1, size=8);
 	n <- readBin(f, integer(), n=1, size=4);
 	d <- readBin(f, integer(), n=1,size=4);
 	Y <- readBin(f, numeric(), n=n*d);
 	Yout <- t(matrix(Y, nrow=d));
 	close(f)
+	file.remove(data_path)
+	file.remove(result_path)
 	Yout
-
 }
 
 
