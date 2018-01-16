@@ -8,7 +8,8 @@ fftRtsne <- function(X,
 		     stop_lying_iter=250,
 		     exaggeration_factor=12.0, no_momentum_during_exag=FALSE,
 		     start_late_exag_iter=-1.0,late_exag_coeff=1.0,
-		     n_trees=50, search_k = -1,rand_seed=-1, ...) {
+		     n_trees=50, search_k = -1,rand_seed=-1,
+		     nterms=3, intervals_per_integer=1, min_num_intervals=50, ...) {
 
 	is.wholenumber <- function(x, tol = .Machine$double.eps^0.5)  abs(x - round(x)) < tol
 
@@ -54,6 +55,10 @@ fftRtsne <- function(X,
 	writeBin( as.integer(search_k), f,size=4) 
 	writeBin( as.integer(start_late_exag_iter), f,size=4) 
 	writeBin( as.numeric(late_exag_coeff), f,size=8) 
+	
+	writeBin( as.integer(nterms), f,size=4) 
+	writeBin( as.numeric(intervals_per_integer), f,size=8) 
+	writeBin( as.integer(min_num_intervals), f,size=4) 
 	tX = c(t(X))
 	writeBin( tX, f) 
 	writeBin( as.integer(rand_seed), f,size=4) 
