@@ -35,6 +35,21 @@ function [mappedX, costs, initialError] = fast_tsne(X,  opts)
 %                       and other optimization tricks. 1 to do plain,vanilla
 %                       gradient descent (useful for testing large exaggeration
 %                       coefficients)
+%                   opts.nterms - If using FIt-SNE, this is the number of
+%                                  interpolation points per sub-interval
+%                   opts.intervals_per_integer - See opts.min_num_intervals              
+%                   opts.min_num_intervals - Let maxloc = ceil(max(max(X)))
+%                   and minloc = floor(min(min(X))). i.e. the points are in
+%                   a [minloc]^no_dims by [maxloc]^no_dims interval/square.
+%                   The number of intervals in each dimension is either
+%                   opts.min_num_intervals or ceil((maxloc -
+%                   minloc)/opts.intervals_per_integer), whichever is
+%                   larger. opts.min_num_intervals must be an integer >0,
+%                   and opts.intervals_per_integer must be >0. Default:
+%                   opts.min_num_intervals=50, opts.intervals_per_integer =
+%                   1
+
+
 
 % Runs the C++ implementation of fast t-SNE using either the IFt-SNE
 % implementation or Barnes Hut
@@ -161,7 +176,25 @@ function [mappedX, costs, initialError] = fast_tsne(X,  opts)
     else
         search_k = opts.search_k;
     end
+    
+    if (~isfield(opts, 'nterms'))
+        nterms = 3;
+    else
+        nterms = opts.nterms;
+    end
 
+    if (~isfield(opts, 'intervals_per_integer'))
+        intervals_per_integer = 1;
+    else
+        intervals_per_integer = opts.intervals_per_integer;
+    end
+    
+    if (~isfield(opts, 'min_num_intervals'))
+        min_num_intervals = 50;
+    else
+        min_num_intervals = opts.min_num_intervals;
+    end
+    
     K = -1;
     sigma = -30;
 
@@ -176,11 +209,14 @@ function [mappedX, costs, initialError] = fast_tsne(X,  opts)
     end
 
     % Run the fast diffusion SNE implementation
-    write_data('temp/data.dat',X, no_dims, theta, perplexity, max_iter, stop_lying_iter, K, sigma, nbody_algo,no_momentum_during_exag, knn_algo, early_exag_coeff,n_trees, search_k,start_late_exag_iter, late_exag_coeff,rand_seed);
+    write_data('temp/data.dat',X, no_dims, theta, perplexity, max_iter, ...
+        stop_lying_iter, K, sigma, nbody_algo,no_momentum_during_exag, knn_algo,...
+        early_exag_coeff,n_trees, search_k,start_late_exag_iter, late_exag_coeff,rand_seed,...
+        nterms,intervals_per_integer,min_num_intervals );
 
     disp('Data written');
     tic
-    [flag, cmdout] = system(fullfile(tsne_path,'/fast_tsne'), '-echo')
+    [flag, cmdout] = system(fullfile(tsne_path,'/fast_tsne'), '-echo');
     if(flag~=0)
         error(cmdout);
     end
@@ -192,7 +228,10 @@ end
 
 
 % Writes the datafile for the fast t-SNE implementation
-function write_data(filename, X, no_dims, theta, perplexity, max_iter, stop_lying_iter,K, sigma, nbody_algo,no_momentum_during_exag, knn_algo, early_exag_coeff,n_trees, search_k,start_late_exag_iter, late_exag_coeff,rand_seed)
+function write_data(filename, X, no_dims, theta, perplexity, max_iter,...
+    stop_lying_iter,K, sigma, nbody_algo,no_momentum_during_exag, knn_algo,...
+    early_exag_coeff,n_trees, search_k,start_late_exag_iter, late_exag_coeff,rand_seed,...
+    nterms,intervals_per_integer,min_num_intervals)
     [n, d] = size(X);
     %h = fopen('data.dat', 'wb');
     h = fopen(filename, 'wb');
@@ -211,8 +250,12 @@ function write_data(filename, X, no_dims, theta, perplexity, max_iter, stop_lyin
     fwrite(h, no_momentum_during_exag, 'int');
     fwrite(h, n_trees, 'int');
     fwrite(h, search_k, 'int');
-        fwrite(h, start_late_exag_iter, 'int');
-        fwrite(h, late_exag_coeff, 'double');
+    fwrite(h, start_late_exag_iter, 'int');
+    fwrite(h, late_exag_coeff, 'double');
+    
+    fwrite(h, nterms, 'int');
+    fwrite(h, intervals_per_integer, 'double');
+    fwrite(h, min_num_intervals, 'int');
 
     
     fwrite(h, X', 'double');
