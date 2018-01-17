@@ -42,8 +42,10 @@ class TSNE
 {
 public:
     int run(double* X, int N, int D, double* Y, int no_dims, double perplexity, double theta, int rand_seed,
-             bool skip_random_init, int max_iter, int stop_lying_iter, int mom_switch_iter, int K, double sigma , int nbody_algo, int knn_algo, double early_exag_coeff,double * initialError, double* costs, bool no_momentum_during_exag,
-		int start_late_exag_iter, double late_exag_coeff, int n_trees,int search_k,int nterms, double intervals_per_integer, int min_num_intervals);
+        bool skip_random_init, int max_iter, int stop_lying_iter, int mom_switch_iter, int K, double sigma, 
+        int nbody_algo, int knn_algo, double early_exag_coeff,double * initialError, double* costs, bool no_momentum_during_exag,
+		int start_late_exag_iter, double late_exag_coeff, int n_trees,int search_k,int nterms, double intervals_per_integer, 
+        int min_num_intervals, unsigned int nthreads);
     bool load_data(const char *data_path, double** data, int* n, int* d, int* no_dims, double* theta,
 		    double* perplexity, int* rand_seed, int* max_iter, int*
 		    stop_lying_iter, int* K, double * sigma, int* nbody_algo,
@@ -68,7 +70,7 @@ private:
     void zeroMean(double* X, int N, int D);
     void computeGaussianPerplexity(double* X, int N, int D, double* P, double perplexity, double sigma);
     void computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row_P, unsigned int** _col_P, double** _val_P, double perplexity, int K, double sigma);
-    int computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row_P, unsigned int** _col_P, double** _val_P, double perplexity, int K, double sigma, int num_trees, int search_k);
+    int computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row_P, unsigned int** _col_P, double** _val_P, double perplexity, int K, double sigma, int num_trees, int search_k, unsigned int nthreads);
     void computeSquaredEuclideanDistance(double* X, int N, int D, double* DD);
     double randn();
 };
