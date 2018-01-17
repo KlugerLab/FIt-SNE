@@ -11,7 +11,7 @@ fftRtsne <- function(X,
 		     n_trees=50, search_k = -1,rand_seed=-1,
 		     nterms=3, intervals_per_integer=1, min_num_intervals=50, 
 		     data_path=NULL, result_path=NULL,
-		     fast_tsne_path='bin/fast_tsne', ...) {
+		     fast_tsne_path='bin/fast_tsne', nthreads=0, ...) {
 	if (is.null(data_path)) {
 		data_path <- tempfile(pattern='fftRtsne_data_', fileext='.dat')
 	}
@@ -21,6 +21,7 @@ fftRtsne <- function(X,
 	if (is.null(fast_tsne_path)) {
 		fast_tsne_path <- system2('which', 'fast_tsne', stdout=TRUE)
 	}
+	fast_tsne_path <- normalizePath(fast_tsne_path)
 	if (!file_test('-x', fast_tsne_path)) {
 		stop(fast_tsne_path, " does not exist or is not executable; check your fast_tsne_path parameter")
 	}
@@ -78,7 +79,7 @@ fftRtsne <- function(X,
 	writeBin( as.integer(rand_seed), f,size=4) 
 	close(f) 
 
-	flag= system2(command=fast_tsne_path, args=c(data_path, result_path));
+	flag= system2(command=fast_tsne_path, args=c(data_path, result_path, nthreads));
 	if (flag != 0) {
 		stop('tsne call failed');
 	}
