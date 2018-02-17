@@ -131,8 +131,8 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 	for(int i = 0; i < N * no_dims; i++) gains[i] = 1.0;
 
 	printf("Computing input similarities...\n");
-	//struct timespec start_timespec, finish_timespec;
-	//clock_gettime(CLOCK_MONOTONIC, &start_timespec);
+	struct timespec start_timespec, finish_timespec;
+	clock_gettime(CLOCK_MONOTONIC, &start_timespec);
 	zeroMean(X, N, D);
 	if (perplexity >0) {
 		printf( "Using perplexity, so normalize input data (to prevent numerical problems)\n");
@@ -180,7 +180,7 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 		// Compute asymmetric pairwise input similarities
 		if (perplexity < 0 ) {
 			printf("Using manually set kernel width\n");
-			computeGaussianPerplexity(X, N, D, &row_P, &col_P, &val_P, perplexity, K, sigma);
+			computeGaussianPerplexity(X, N, D, &row_P, &col_P, &val_P, perplexity, K, sigma, nthreads);
 		}else {
 			printf("Using perplexity, not the manually set kernel width.  K (number of nearest neighbors) and sigma (bandwidth) parameters are going to be ignored.\n");
 			if (knn_algo == 1) {
@@ -190,7 +190,7 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 				if (error_code <0) return error_code;
 			}else if (knn_algo == 2){
 				printf("Using vp trees for nearest neighbor search\n");
-				computeGaussianPerplexity(X, N, D, &row_P, &col_P, &val_P, perplexity, (int) (3 * perplexity), -1);
+				computeGaussianPerplexity(X, N, D, &row_P, &col_P, &val_P, perplexity, (int) (3 * perplexity), -1, nthreads);
 
 			}else{
 				printf("Invalid knn_algo param\n");
@@ -249,8 +249,9 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 
 	// Perform main training loop
 
-	//clock_gettime(CLOCK_MONOTONIC, &finish_timespec);
-	//double elapsed_input = (finish_timespec.tv_sec - start_timespec.tv_sec);
+	clock_gettime(CLOCK_MONOTONIC, &finish_timespec);
+	double elapsed_input = (finish_timespec.tv_sec - start_timespec.tv_sec);
+	printf("Input similarities learned in %lf seconds\n", elapsed_input);
 
 	if(exact) printf("Input similarities computed \nLearning embedding...\n");
 	else printf("Input similarities computed (sparsity = %f)!\nLearning embedding...\n", (double) row_P[N] / ((double) N * (double) N));
@@ -1068,16 +1069,7 @@ int TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row
 							std::vector<int> closest;
 							std::vector<double> closest_distances;
 							tree.get_nns_by_item(n, K+1, search_k, &closest, &closest_distances);
-							//for(int m = 0; m < 5; m++) {
-							//					printf("annoy: %d, %d, %lf vs. ball: %d,%d, %lf\n", n, closest[m], closest_distances[m], n, indices[m].index(), distances[m]);
-							//					double distancecalc = 0;
-							//					for (int ii=0; ii< D; ii++) {
-							//						distancecalc += pow(X[n*D + ii] - X[closest[m]*D + ii],2.0);
-							//					}
-							//					printf("Checking dsitances to %d point: %lf \n", closest[m], sqrt(distancecalc));
-							//			}
-							//			printf("\n");
-							//
+
 							// Initialize some variables for binary search
 							bool found = false;
 							double beta = 1.0;
@@ -1192,7 +1184,7 @@ int TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row
 	return 0;
 }
 // Compute input similarities with a fixed perplexity using ball trees (this function allocates memory another function should free)
-void TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row_P, unsigned int** _col_P, double** _val_P, double perplexity, int K, double sigma) {
+void TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row_P, unsigned int** _col_P, double** _val_P, double perplexity, int K, double sigma, unsigned int nthreads) {
 
 
 	if(perplexity > K) printf("Perplexity should be lower than K!\n");
@@ -1205,8 +1197,6 @@ void TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _ro
 	unsigned int* row_P = *_row_P;
 	unsigned int* col_P = *_col_P;
 	double* val_P = *_val_P;
-	double* cur_P = (double*) malloc((N - 1) * sizeof(double));
-	if(cur_P == NULL) { printf("Memory allocation failed!\n"); exit(1); }
 	row_P[0] = 0;
 	for(int n = 0; n < N; n++) row_P[n + 1] = row_P[n] + (unsigned int) K;
 
@@ -1218,75 +1208,109 @@ void TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _ro
 
 	// Loop over all points to find nearest neighbors
 	printf("Building tree...\n");
-	vector<DataPoint> indices;
-	vector<double> distances;
-	for(int n = 0; n < N; n++) {
 
-		if(n % 10000 == 0) printf(" - point %d of %d\n", n, N);
-
-		// Find nearest neighbors
-		indices.clear();
-		distances.clear();
-		tree->search(obj_X[n], K + 1, &indices, &distances);
-
-		// Initialize some variables for binary search
-		bool found = false;
-		double beta = 1.0;
-		double min_beta = -DBL_MAX;
-		double max_beta =  DBL_MAX;
-		double tol = 1e-5;
-
-		// Iterate until we found a good perplexity
-		int iter = 0; double sum_P;
-		while(!found && iter < 200) {
-
-			// Compute Gaussian kernel row
-			for(int m = 0; m < K; m++) cur_P[m] = exp(-beta * distances[m + 1] * distances[m + 1]);
-
-			// Compute entropy of current row
-			sum_P = DBL_MIN;
-			for(int m = 0; m < K; m++) sum_P += cur_P[m];
-			double H = .0;
-			for(int m = 0; m < K; m++) H += beta * (distances[m + 1] * distances[m + 1] * cur_P[m]);
-			H = (H / sum_P) + log(sum_P);
-
-			// Evaluate whether the entropy is within the tolerance level
-			double Hdiff = H - log(perplexity);
-			if(Hdiff < tol && -Hdiff < tol) {
-				found = true;
-			}
-			else {
-				if(Hdiff > 0) {
-					min_beta = beta;
-					if(max_beta == DBL_MAX || max_beta == -DBL_MAX)
-						beta *= 2.0;
-					else
-						beta = (beta + max_beta) / 2.0;
-				}
-				else {
-					max_beta = beta;
-					if(min_beta == -DBL_MAX || min_beta == DBL_MAX)
-						beta /= 2.0;
-					else
-						beta = (beta + min_beta) / 2.0;
-				}
-			}
-
-			// Update iteration counter
-			iter++;
-		}
-
-		// Row-normalize current row of P and store in matrix
-		for(unsigned int m = 0; m < K; m++) cur_P[m] /= sum_P;
-		for(unsigned int m = 0; m < K; m++) {
-			col_P[row_P[n] + m] = (unsigned int) indices[m + 1].index();
-			val_P[row_P[n] + m] = cur_P[m];
-		}
+	if (nthreads == 0) {
+		nthreads = std::thread::hardware_concurrency();
 	}
+	//const size_t nthreads = 1;
+	{
+		// Pre loop
+		std::cout<<"parallel ("<<nthreads<<" threads):"<<std::endl;
+		std::vector<std::thread> threads(nthreads);
+		for(int t = 0;t<nthreads;t++)
+		{
+			threads[t] = std::thread(std::bind(
+						[&](const int bi, const int ei, const int t)
+						{
+						// loop over all items
+						for(int n = bi;n<ei;n++)
+						{
+						// inner loop
+						{
+						//double* cur_P = (double*) malloc((N - 1) * sizeof(double));
+						std::vector<double> cur_P(K);
+						//if(cur_P == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+
+						if(n % 10000 == 0) printf(" - Thread %d: %d/%d \n",t, n-bi, ei-bi );
+						//if(n % 100 == 0) printf(" - point %d of %d\n", n, N);
+
+						vector<DataPoint> indices;
+						vector<double> distances;
+						// Find nearest neighbors
+						tree->search(obj_X[n], K + 1, &indices, &distances);
+
+						// Initialize some variables for binary search
+						bool found = false;
+						double beta = 1.0;
+						double min_beta = -DBL_MAX;
+						double max_beta =  DBL_MAX;
+						double tol = 1e-5;
+
+						// Iterate until we found a good perplexity
+						int iter = 0; double sum_P;
+						while(!found && iter < 200) {
+
+							// Compute Gaussian kernel row
+							for(int m = 0; m < K; m++) cur_P[m] = exp(-beta * distances[m + 1] * distances[m + 1]);
+
+							// Compute entropy of current row
+							sum_P = DBL_MIN;
+							for(int m = 0; m < K; m++) sum_P += cur_P[m];
+							double H = .0;
+							for(int m = 0; m < K; m++) H += beta * (distances[m + 1] * distances[m + 1] * cur_P[m]);
+							H = (H / sum_P) + log(sum_P);
+
+							// Evaluate whether the entropy is within the tolerance level
+							double Hdiff = H - log(perplexity);
+							if(Hdiff < tol && -Hdiff < tol) {
+								found = true;
+							}
+							else {
+								if(Hdiff > 0) {
+									min_beta = beta;
+									if(max_beta == DBL_MAX || max_beta == -DBL_MAX)
+										beta *= 2.0;
+									else
+										beta = (beta + max_beta) / 2.0;
+								}
+								else {
+									max_beta = beta;
+									if(min_beta == -DBL_MAX || min_beta == DBL_MAX)
+										beta /= 2.0;
+									else
+										beta = (beta + min_beta) / 2.0;
+								}
+							}
+
+							// Update iteration counter
+							iter++;
+						}
+
+						//printf("\n point: %d", n);
+						// Row-normalize current row of P and store in matrix
+						for(unsigned int m = 0; m < K; m++) cur_P[m] /= sum_P;
+						for(unsigned int m = 0; m < K; m++) {
+							col_P[row_P[n] + m] = (unsigned int) indices[m + 1].index();
+							val_P[row_P[n] + m] = cur_P[m];
+							//printf(", %.12f(%d)", cur_P[m], m);
+						}
+
+
+						indices.clear();
+						distances.clear();
+						cur_P.clear();
+						}
+						}
+
+						},t*N/nthreads,(t+1)==nthreads?N:(t+1)*N/nthreads,t));
+		}
+		std::for_each(threads.begin(),threads.end(),[](std::thread& x){x.join();});
+		// Post loop
+	}
+	printf("Done!");
 
 	// Clean up memory
 	obj_X.clear();
-	free(cur_P);
 	delete tree;
 }
 

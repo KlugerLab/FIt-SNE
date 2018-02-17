@@ -128,10 +128,10 @@ public:
         std::priority_queue<HeapItem> heap;
         
         // Variable that tracks the distance to the farthest point in our results
-        _tau = DBL_MAX;
         
         // Perform the search
-        search(_root, target, k, heap);
+        double _tau = DBL_MAX;
+        search(_root, target, k, heap,_tau);
         
         // Gather final results
         results->clear(); distances->clear();
@@ -148,7 +148,6 @@ public:
     
 private:
     std::vector<T> _items;
-    double _tau;
     
     // Single node of a VP tree (has a point and radius; left children are closer to point than the radius)
     struct Node
@@ -227,7 +226,7 @@ private:
     }
     
     // Helper function that searches the tree    
-    void search(Node* node, const T& target, int k, std::priority_queue<HeapItem>& heap)
+    void search(Node* node, const T& target, int k, std::priority_queue<HeapItem>& heap, double& _tau)
     {
         if(node == NULL) return;     // indicates that we're done here
         
@@ -249,21 +248,21 @@ private:
         // If the target lies within the radius of ball
         if(dist < node->threshold) {
             if(dist - _tau <= node->threshold) {         // if there can still be neighbors inside the ball, recursively search left child first
-                search(node->left, target, k, heap);
+                search(node->left, target, k, heap, _tau);
             }
             
             if(dist + _tau >= node->threshold) {         // if there can still be neighbors outside the ball, recursively search right child
-                search(node->right, target, k, heap);
+                search(node->right, target, k, heap, _tau);
             }
         
         // If the target lies outsize the radius of the ball
         } else {
             if(dist + _tau >= node->threshold) {         // if there can still be neighbors outside the ball, recursively search right child first
-                search(node->right, target, k, heap);
+                search(node->right, target, k, heap, _tau);
             }
             
             if (dist - _tau <= node->threshold) {         // if there can still be neighbors inside the ball, recursively search left child
-                search(node->left, target, k, heap);
+                search(node->left, target, k, heap, _tau);
             }
         }
     }
