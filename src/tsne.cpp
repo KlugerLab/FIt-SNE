@@ -131,8 +131,8 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 	for(int i = 0; i < N * no_dims; i++) gains[i] = 1.0;
 
 	printf("Computing input similarities...\n");
-	struct timespec start_timespec, finish_timespec;
-	clock_gettime(CLOCK_MONOTONIC, &start_timespec);
+	//struct timespec start_timespec, finish_timespec;
+	//clock_gettime(CLOCK_MONOTONIC, &start_timespec);
 	zeroMean(X, N, D);
 	if (perplexity >0) {
 		printf( "Using perplexity, so normalize input data (to prevent numerical problems)\n");
@@ -249,9 +249,9 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 
 	// Perform main training loop
 
-	clock_gettime(CLOCK_MONOTONIC, &finish_timespec);
-	double elapsed_input = (finish_timespec.tv_sec - start_timespec.tv_sec);
-	printf("Input similarities learned in %lf seconds\n", elapsed_input);
+	//clock_gettime(CLOCK_MONOTONIC, &finish_timespec);
+	//double elapsed_input = (finish_timespec.tv_sec - start_timespec.tv_sec);
+	//printf("Input similarities learned in %lf seconds\n", elapsed_input);
 
 	if(exact) printf("Input similarities computed \nLearning embedding...\n");
 	else printf("Input similarities computed (sparsity = %f)!\nLearning embedding...\n", (double) row_P[N] / ((double) N * (double) N));
@@ -356,11 +356,11 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 		free(col_P); col_P = NULL;
 		free(val_P); val_P = NULL;
 	}
-	printf("N-body phase completed in %4.2f seconds.\n", total_time);
 	/*
+	printf("N-body phase completed in %4.2f seconds.\n", total_time);
 	   FILE * fp = fopen( "temp/time_results.txt", "a" ); // Open file for writing
 	   if (fp != NULL) {
-	   fprintf(fp,"%f, %f\n", elapsed_input, total_time);
+	   fprintf(fp,"vptree8, %d, %d, %f, %f\n", N, D, elapsed_input, total_time);
 	   fclose(fp);
 	   }
 	   */
