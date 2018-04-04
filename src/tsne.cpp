@@ -51,6 +51,7 @@
 #include "tsne.h"
 #include <unistd.h>
 #include <sstream>
+#include <functional>
 
 int itTest = 0;
 bool measure_accuracy = false;
