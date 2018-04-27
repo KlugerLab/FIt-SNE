@@ -4,3 +4,4 @@ temp/*
 *.dat
 .DS_Store
 *.sw*
+.idea/
