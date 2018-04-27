@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6"/>
+	<Project>
+		<Option title="FIt-SNE"/>
+		<Option makefile_is_custom="1"/>
+		<Option compiler="gcc"/>
+		<Option virtualFolders="CMake Files\;"/>
+		<Build>
+			<Target title="all">
+				<Option working_dir="/home/pavlin/dev/FIt-SNE/cmake-build-debug"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j8 -f &quot;/home/pavlin/dev/FIt-SNE/cmake-build-debug/Makefile&quot;  VERBOSE=1 all"/>
+					<CompileFile command="/usr/bin/make -j8 -f &quot;/home/pavlin/dev/FIt-SNE/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j8 -f &quot;/home/pavlin/dev/FIt-SNE/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j8 -f &quot;/home/pavlin/dev/FIt-SNE/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="rebuild_cache">
+				<Option working_dir="/home/pavlin/dev/FIt-SNE/cmake-build-debug"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j8 -f &quot;/home/pavlin/dev/FIt-SNE/cmake-build-debug/Makefile&quot;  VERBOSE=1 rebuild_cache"/>
+					<CompileFile command="/usr/bin/make -j8 -f &quot;/home/pavlin/dev/FIt-SNE/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j8 -f &quot;/home/pavlin/dev/FIt-SNE/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j8 -f &quot;/home/pavlin/dev/FIt-SNE/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="bin/fast_tsne">
+				<Option output="/home/pavlin/dev/FIt-SNE/cmake-build-debug/bin/fast_tsne" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/pavlin/dev/FIt-SNE/cmake-build-debug"/>
+				<Option object_output="./"/>
+				<Option type="1"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/opt/intel/composerxe/linux/mkl/include"/>
+					<Add directory="/opt/intel/composerxe/linux/tbb/include"/>
+					<Add directory="/usr/lib/gcc/x86_64-pc-linux-gnu/8.2.0/../../../../include/c++/8.2.0"/>
+					<Add directory="/usr/lib/gcc/x86_64-pc-linux-gnu/8.2.0/../../../../include/c++/8.2.0/x86_64-pc-linux-gnu"/>
+					<Add directory="/usr/lib/gcc/x86_64-pc-linux-gnu/8.2.0/../../../../include/c++/8.2.0/backward"/>
+					<Add directory="/usr/lib/gcc/x86_64-pc-linux-gnu/8.2.0/include"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/usr/lib/gcc/x86_64-pc-linux-gnu/8.2.0/include-fixed"/>
+					<Add directory="/usr/include"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j8 -f &quot;/home/pavlin/dev/FIt-SNE/cmake-build-debug/Makefile&quot;  VERBOSE=1 bin/fast_tsne"/>
+					<CompileFile command="/usr/bin/make -j8 -f &quot;/home/pavlin/dev/FIt-SNE/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j8 -f &quot;/home/pavlin/dev/FIt-SNE/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j8 -f &quot;/home/pavlin/dev/FIt-SNE/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="bin/fast_tsne/fast">
+				<Option output="/home/pavlin/dev/FIt-SNE/cmake-build-debug/bin/fast_tsne" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/pavlin/dev/FIt-SNE/cmake-build-debug"/>
+				<Option object_output="./"/>
+				<Option type="1"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/opt/intel/composerxe/linux/mkl/include"/>
+					<Add directory="/opt/intel/composerxe/linux/tbb/include"/>
+					<Add directory="/usr/lib/gcc/x86_64-pc-linux-gnu/8.2.0/../../../../include/c++/8.2.0"/>
+					<Add directory="/usr/lib/gcc/x86_64-pc-linux-gnu/8.2.0/../../../../include/c++/8.2.0/x86_64-pc-linux-gnu"/>
+					<Add directory="/usr/lib/gcc/x86_64-pc-linux-gnu/8.2.0/../../../../include/c++/8.2.0/backward"/>
+					<Add directory="/usr/lib/gcc/x86_64-pc-linux-gnu/8.2.0/include"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/usr/lib/gcc/x86_64-pc-linux-gnu/8.2.0/include-fixed"/>
+					<Add directory="/usr/include"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j8 -f &quot;/home/pavlin/dev/FIt-SNE/cmake-build-debug/Makefile&quot;  VERBOSE=1 bin/fast_tsne/fast"/>
+					<CompileFile command="/usr/bin/make -j8 -f &quot;/home/pavlin/dev/FIt-SNE/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j8 -f &quot;/home/pavlin/dev/FIt-SNE/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j8 -f &quot;/home/pavlin/dev/FIt-SNE/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="edit_cache">
+				<Option working_dir="/home/pavlin/dev/FIt-SNE/cmake-build-debug"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j8 -f &quot;/home/pavlin/dev/FIt-SNE/cmake-build-debug/Makefile&quot;  VERBOSE=1 edit_cache"/>
+					<CompileFile command="/usr/bin/make -j8 -f &quot;/home/pavlin/dev/FIt-SNE/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j8 -f &quot;/home/pavlin/dev/FIt-SNE/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j8 -f &quot;/home/pavlin/dev/FIt-SNE/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+		</Build>
+		<Unit filename="/home/pavlin/dev/FIt-SNE/src/nbodyfft.cpp">
+			<Option target="bin/fast_tsne"/>
+		</Unit>
+		<Unit filename="/home/pavlin/dev/FIt-SNE/src/nbodyfft.h">
+			<Option target="bin/fast_tsne"/>
+		</Unit>
+		<Unit filename="/home/pavlin/dev/FIt-SNE/src/sptree.cpp">
+			<Option target="bin/fast_tsne"/>
+		</Unit>
+		<Unit filename="/home/pavlin/dev/FIt-SNE/src/sptree.h">
+			<Option target="bin/fast_tsne"/>
+		</Unit>
+		<Unit filename="/home/pavlin/dev/FIt-SNE/src/tsne.cpp">
+			<Option target="bin/fast_tsne"/>
+		</Unit>
+		<Unit filename="/home/pavlin/dev/FIt-SNE/src/tsne.h">
+			<Option target="bin/fast_tsne"/>
+		</Unit>
+		<Unit filename="/home/pavlin/dev/FIt-SNE/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\"/>
+		</Unit>
+	</Project>
+</CodeBlocks_project_file>

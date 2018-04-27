@@ -1,0 +1,1 @@
+/usr/bin/c++   -O3 -pthread -lfftw3 -lm -g  -rdynamic CMakeFiles/bin/fast_tsne.dir/src/sptree.o CMakeFiles/bin/fast_tsne.dir/src/tsne.o CMakeFiles/bin/fast_tsne.dir/src/nbodyfft.o  -o bin/fast_tsne 
