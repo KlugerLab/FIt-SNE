@@ -2,831 +2,446 @@
 
 #include "nbodyfft.h"
 
-#define PI 3.14159265358979323846
 
-#include <time.h>
-#include <stdio.h>
-#include <math.h>
-#include <stdlib.h>
+using namespace std;
 
 
-int precompute2(double xmax, double xmin, double ymax, double ymin, int nlat, int nterms, kerneltype2d ker,
-                double *band, double *boxl, double *boxr, double *prods, double *xpts, double *xptsall, double *yptsall,
-                int *irearr, fftw_complex *zkvalf) {
+void precompute_2d(double x_max, double x_min, double y_max, double y_min, int n_boxes, int n_interpolation_points,
+                   kernel_type_2d kernel, double *box_lower_bounds, double *box_upper_bounds, double *y_tilde_spacings,
+                   double *y_tilde, double *x_tilde, complex<double> *fft_kernel_tilde) {
     /*
      * Set up the boxes
      */
-    int nboxes = nlat * nlat;
-    double boxwidth = (xmax - xmin) / (double) nlat;
+    int n_total_boxes = n_boxes * n_boxes;
+    double box_width = (x_max - x_min) / (double) n_boxes;
 
-    //Left and right bounds of each box
-    int nn = nboxes * nterms * nterms;
-    if (boxl == NULL) {
-        printf("Malloc failed\n");
-        exit(-1);
-    }
+    // Left and right bounds of each box, first the lower bounds in the x direction, then in the y direction
+    for (int i = 0; i < n_boxes; i++) {
+        for (int j = 0; j < n_boxes; j++) {
+            box_lower_bounds[i * n_boxes + j] = j * box_width + x_min;
+            box_upper_bounds[i * n_boxes + j] = (j + 1) * box_width + x_min;
 
-    int ii = 0;
-    //printf("boxwidth: %lf, nlat %d, xmax %f xmin %f\n", boxwidth, nlat, xmax, xmin);
-    for (int i = 0; i < nlat; i++) {
-        for (int j = 0; j < nlat; j++) {
-            boxl[0 * nboxes + ii] = j * boxwidth + xmin;
-            boxr[0 * nboxes + ii] = (j + 1) * (boxwidth) + xmin;
-
-            boxl[1 * nboxes + ii] = i * boxwidth + ymin;
-            boxr[1 * nboxes + ii] = (i + 1) * (boxwidth) + ymin;
-            //printf("box %d, %lf to %lf and %lf %lf \n", i, boxl[i], boxr[i] , boxl[nboxes+ii], boxr[nboxes+ii]);
-            ii++;
+            box_lower_bounds[n_total_boxes + i * n_boxes + j] = i * box_width + y_min;
+            box_upper_bounds[n_total_boxes + i * n_boxes + j] = (i + 1) * box_width + y_min;
         }
     }
 
-    //Coordinates of each (equispaced) interpolation node for a single box
-    double h = 2 / (double) nterms;
-
-    xpts[0] = -1 + h / 2.0;
-    for (int i = 1; i < nterms; i++) {
-        xpts[i] = xpts[0] + (i) * h;
+    // Coordinates of each (equispaced) interpolation node for a single box
+    double h = 1 / (double) n_interpolation_points;
+    y_tilde_spacings[0] = h / 2;
+    for (int i = 1; i < n_interpolation_points; i++) {
+        y_tilde_spacings[i] = y_tilde_spacings[i - 1] + h;
     }
+
+    // Coordinates of all the equispaced interpolation points
+    int n_interpolation_points_1d = n_interpolation_points * n_boxes;
+    int n_fft_coeffs = 2 * n_interpolation_points_1d;
+
+    h = h * box_width;
+    x_tilde[0] = x_min + h / 2;
+    y_tilde[0] = y_min + h / 2;
+    for (int i = 1; i < n_interpolation_points_1d; i++) {
+        x_tilde[i] = x_tilde[i - 1] + h;
+        y_tilde[i] = y_tilde[i - 1] + h;
+    }
+
     /*
-     * Interpolate kernel using lagrange polynomials
+     * Evaluate the kernel at the interpolation nodes and form the embedded generating kernel vector for a circulant
+     * matrix
      */
-
-    //Get the denominators for the lagrange polynomials (this is getprods())
-    for (int i = 0; i < nterms; i++) {
-        prods[i] = 1;
-        for (int j = 0; j < nterms; j++) {
-            if (i != j) {
-                prods[i] = prods[i] * (xpts[i] - xpts[j]);
-            }
-        }
-//		printf("Prods[%d] xpts[%d] = %lf, %lf\n", i,i, prods[i], xpts[i]);
-    }
-
-
-    //Coordinates of each (equispaced) interpolation node for all boxes
-    int nfourh = nterms * nlat;
-    int nfour = 2 * nterms * nlat;
-    h = h * boxwidth / 2;
-    double xstart = xmin + h / 2;
-    double ystart = ymin + h / 2;
-
-
-    ii = 0;
-    for (int i = 0; i < nfourh; i++) {
-        for (int j = 0; j < nfourh; j++) {
-            xptsall[ii] = xstart + (i) * h;
-            yptsall[ii] = ystart + (j) * h;
-            //printf("%d xptsall %lf, %lf \n", ii, xptsall[ii],  yptsall[ii]);
-            ii++;
+    auto *kernel_tilde = new double[n_fft_coeffs * n_fft_coeffs]();
+    for (int i = 0; i < n_interpolation_points_1d; i++) {
+        for (int j = 0; j < n_interpolation_points_1d; j++) {
+            double tmp = kernel(y_tilde[0], x_tilde[0], y_tilde[i], x_tilde[j]);
+            kernel_tilde[(n_interpolation_points_1d + i) * n_fft_coeffs + (n_interpolation_points_1d + j)] = tmp;
+            kernel_tilde[(n_interpolation_points_1d - i) * n_fft_coeffs + (n_interpolation_points_1d + j)] = tmp;
+            kernel_tilde[(n_interpolation_points_1d + i) * n_fft_coeffs + (n_interpolation_points_1d - j)] = tmp;
+            kernel_tilde[(n_interpolation_points_1d - i) * n_fft_coeffs + (n_interpolation_points_1d - j)] = tmp;
         }
     }
 
-    ii = 0;
-    for (int ilat = 0; ilat < nlat; ilat++) {
-        for (int jlat = 0; jlat < nlat; jlat++) {
-            for (int i = 0; i < nterms; i++) {
-                for (int j = 0; j < nterms; j++) {
-                    int iy = (ilat) * nterms + j;
-                    int ix = (jlat) * nterms + i;
-                    int ipt = (ix) * nlat * nterms + iy;
-                    irearr[ii] = ipt;
-                    //printf("irearr[%d]=%d\n", ii, ipt);
-                    ii++;
-                }
-            }
-        }
-    }
-
-
-    //Kernel evaluated at interpolation nodes. Make it circulant
-    double *zkvals = (double *) calloc(nfour * nfour, sizeof(double));
-    ii = 0;
-    for (int i = 0; i < nfourh; i++) {
-        for (int j = 0; j < nfourh; j++) {
-            double tmp = ker(xptsall[0], yptsall[0], xptsall[ii], yptsall[ii], band[i], band[i]);
-            //printf("tmp[%d,%d] %f, %f, %f,%f = %f\n", i,j,xptsall[0],yptsall[0], xptsall[ii],yptsall[ii],tmp);
-            zkvals[(i + nfourh) * nfour + (j + nfourh)] = tmp;
-            zkvals[(nfourh - i) * nfour + (j + nfourh)] = tmp;
-            zkvals[(i + nfourh) * nfour + (nfourh - j)] = tmp;
-            zkvals[(nfourh - i) * nfour + (nfourh - j)] = tmp;
-
-            ii++;
-        }
-    }
-    for (int i = 20; i < 30; i++) {
-        for (int j = 30; j < 31; j++) {
-
-            //printf("zkvals[%d,%d] = %f\n", i,j,zkvals[i*nfour + j]);
-        }
-    }
-
-    //FFT of the kernel
-    double *zkvali = (double *) fftw_malloc(sizeof(double) * nfour * nfour);
-    fftw_plan p;
-    p = fftw_plan_dft_r2c_2d(nfour, nfour, zkvali, zkvalf, FFTW_ESTIMATE);
-    for (int i = 0; i < nfour * nfour; i++) {
-        zkvali[i] = 0;
-    }
-
-    for (int i = 0; i < nfour * nfour; i++) {
-        zkvali[i] = zkvals[i];
-    }
+    // Precompute the FFT of the kernel generating matrix
+    fftw_plan p = fftw_plan_dft_r2c_2d(n_fft_coeffs, n_fft_coeffs, kernel_tilde,
+                                       reinterpret_cast<fftw_complex *>(fft_kernel_tilde), FFTW_ESTIMATE);
     fftw_execute(p);
 
-    /*
-    for (int i = 20; i< 30; i++){
-        for (int j = 30; j< 31; j++){
-            printf("zkvalsf[%d,%d] = %f\n", i,j,zkvalf3[i*nfour + j][0]/(nfour*nfour));
-        }
-    }
-    */
-
     fftw_destroy_plan(p);
-    fftw_free(zkvali);
-
-    free(zkvals);
-    //The rest of this should be in a separate function...
-
-    return 1;
+    delete[] kernel_tilde;
 }
 
 
-int nbodyfft2(int n, int ndim, double *xs, double *ys, double *charges, int nlat, int nterms, double *boxl,
-              double *boxr, double *prods, double *xpts, double *xptsall, double *yptsall, int *irearr,
-              fftw_complex *zkvalf, double *outpot) {
-    int nboxes = nlat * nlat;
-    int nn = nboxes * nterms * nterms;
+void n_body_fft_2d(int N, int n_terms, double *xs, double *ys, double *chargesQij, int n_boxes,
+                   int n_interpolation_points, double *box_lower_bounds, double *box_upper_bounds,
+                   double *y_tilde_spacings, complex<double> *fft_kernel_tilde, double *potentialQij) {
+    int n_total_boxes = n_boxes * n_boxes;
+    int total_interpolation_points = n_total_boxes * n_interpolation_points * n_interpolation_points;
 
-    double rmin = boxl[0];
-    double boxwidth = boxr[0] - boxl[0];
+    double coord_min = box_lower_bounds[0];
+    double box_width = box_upper_bounds[0] - box_lower_bounds[0];
 
-    int *boxcount = (int *) calloc((nboxes + 1), sizeof(int));
-    int *boxcounti = (int *) calloc(nboxes + 1, sizeof(int));
-    int *boxsort = (int *) malloc(n * sizeof(int));
-    if (boxcount == NULL) {
-        printf("Malloc failed\n");
-        exit(-1);
-    }
+    auto *point_box_idx = new int[N];
 
-    //Initialize the charges and the locations
-    for (int i = 0; i < n; i++) {
-        int ixs = (xs[i] - rmin) / boxwidth;
-        int iys = (ys[i] - rmin) / boxwidth;
-        //printf("%lf,%lf\n", rmin, boxwidth);
-        //printf("%d,%d,%d\n", ixs, iys, nboxes);
-        if (ixs >= nlat) {
-            ixs = nlat - 1;
-        }
-        if (ixs < 0) {
-            ixs = 0;
-        }
-        if (iys >= nlat) {
-            iys = nlat - 1;
-        }
-        if (iys < 0) {
-            iys = 0;
+    // Determine which box each point belongs to
+    for (int i = 0; i < N; i++) {
+        auto x_idx = static_cast<int>((xs[i] - coord_min) / box_width);
+        auto y_idx = static_cast<int>((ys[i] - coord_min) / box_width);
+        // TODO: Figure out how on earth x_idx can be less than zero...
+        // It's probably something to do with the fact that we use the single lowest coord for both dims? Probably not
+        // this, more likely negative 0 if rounding errors
+        if (x_idx >= n_boxes) {
+            x_idx = n_boxes - 1;
+        } else if (x_idx < 0) {
+            x_idx = 0;
         }
 
-        int icol = ixs;
-        int irow = iys;
-
-        int iadr = (irow) * nlat + icol;
-
-        boxcount[iadr] += 1;
-        boxsort[i] = iadr;
-        //printf("%d: %f,%f, in box %d, x: %.2f - %.2f,y: %.2f - %.2f which has %d\n", i, xs[i],ys[i],  iadr, boxl[0*nboxes + iadr], boxr[0*nboxes + iadr],boxl[1*nboxes + iadr], boxr[1*nboxes + iadr], boxcount[iadr]);
-    }
-
-
-    int *iarr = (int *) malloc(n * sizeof(int));
-    double *chargessort = (double *) malloc(ndim * n * sizeof(double));
-
-    //boxsort[i] = ibox: the box for the ith point
-    //Set the offset of each box
-    int *boxoffset = (int *) malloc((nboxes + 1) * sizeof(int));
-    boxoffset[0] = 0;
-    for (int ibox = 1; ibox < nboxes + 1; ibox++) {
-        boxoffset[ibox] = boxoffset[ibox - 1] + boxcount[ibox - 1];
-    }
-
-    for (int ibox = 0; ibox < nboxes; ibox++) {
-        boxcounti[ibox] = 0;
-    }
-
-    //The number of points in each box (so far)
-    for (int i = 0; i < n; i++) {
-        int iadr = boxsort[i];
-        int indx = boxoffset[iadr] + boxcounti[iadr];
-        iarr[indx] = i;
-        boxcounti[iadr] = boxcounti[iadr] + 1;
-        //printf("%f, %f , iarr[%d] = %d, iadr = %d, boxoffset[iadr] = %d, boxcounti[iadr] = %d\n", xs[iarr[indx]],ys[iarr[indx]],  indx,i,iadr, boxoffset[iadr], boxcounti[iadr]);
-    }
-
-    for (int i = 0; i < n; i++) {
-        int ibox = boxsort[iarr[i]];
-        //printf("%d (%d): %f, in box %d, %.2f - %.2f which has %d\n", i,iarr[i], locs[iarr[i]], ibox, boxl[ibox], boxr[ibox],boxcount[ibox]);
-    }
-
-    //Locsort
-
-    //FILE *f = fopen("iarr.txt", "w");
-    double *xsort = (double *) malloc(n * sizeof(double));
-    double *ysort = (double *) malloc(n * sizeof(double));
-    for (int i = 0; i < n; i++) {
-        xsort[i] = xs[iarr[i]];
-        ysort[i] = ys[iarr[i]];
-        //fprintf(f, "%d,", iarr[i]);
-        for (int idim = 0; idim < ndim; idim++) {
-            chargessort[idim * n + i] = charges[idim * n + iarr[i]];
+        if (y_idx >= n_boxes) {
+            y_idx = n_boxes - 1;
+        } else if (y_idx < 0) {
+            y_idx = 0;
         }
+        point_box_idx[i] = y_idx * n_boxes + x_idx;
     }
 
-    for (int i = 0; i < 10; i++) {
-//		printf("Charge %d at %f,%f, sorted %f,%f: %f, sorted; %f\n", i, xs[i], ys[i], xsort[i],xsort[i], charges[i], chargessort[0*n+i]);
+    // Compute the relative position of each point in its box in the interval [0, 1]
+    auto *x_in_box = new double[N];
+    auto *y_in_box = new double[N];
+    for (int i = 0; i < N; i++) {
+        int box_idx = point_box_idx[i];
+        double x_min = box_lower_bounds[box_idx];
+        double y_min = box_lower_bounds[n_total_boxes + box_idx];
+        x_in_box[i] = (xs[i] - x_min) / box_width;
+        y_in_box[i] = (ys[i] - y_min) / box_width;
     }
 
+    /*
+     * Step 1: Interpolate kernel using Lagrange polynomials and compute the w coefficients
+     */
+    // Compute the interpolated values at each real point with each Lagrange polynomial in the `x` direction
+    auto *x_interpolated_values = new double[N * n_interpolation_points];
+    interpolate(n_interpolation_points, N, x_in_box, y_tilde_spacings, x_interpolated_values);
+    // Compute the interpolated values at each real point with each Lagrange polynomial in the `y` direction
+    auto *y_interpolated_values = new double[N * n_interpolation_points];
+    interpolate(n_interpolation_points, N, y_in_box, y_tilde_spacings, y_interpolated_values);
 
-
-    //tlocssort is the translated locations
-    double *xsp = (double *) malloc(n * sizeof(double));
-    double *ysp = (double *) malloc(n * sizeof(double));
-    for (int ibox = 0; ibox < nboxes; ibox++) {
-        for (int i = boxoffset[ibox]; i < boxoffset[ibox + 1]; i++) {
-            double xmin = boxl[ibox];
-            double xmax = boxr[ibox];
-            xsp[i] = ((xsort[i] - xmin) / (xmax - xmin)) * 2 - 1;
-
-            double ymin = boxl[nboxes + ibox];
-            double ymax = boxr[nboxes + ibox];
-            ysp[i] = ((ysort[i] - ymin) / (ymax - ymin)) * 2 - 1;
-            //printf("i %d  %f,%f  tlocssort[i] %f,%f  xmin %f xmax %f, ymin %f ymax %f\n", i, xsort[i],ysort[i],  xsp[i],ysp[i], xmin, xmax, ymin, ymax);
-        }
-    }
-
-
-    //Get the L_j vals
-
-
-    double *ydiff = (double *) malloc(n * nterms * sizeof(double));
-    double *yprods = (double *) malloc(n * nterms * sizeof(double));
-    for (int j = 0; j < n; j++) {
-        yprods[j] = 1;
-        for (int i = 0; i < nterms; i++) {
-            ydiff[j + i * n] = xsp[j] - xpts[i];
-            yprods[j] = yprods[j] * ydiff[j + i * n];
-        }
-    }
-
-
-    double *svalsx = (double *) malloc(n * nterms * sizeof(double));
-    for (int j = 0; j < n; j++) {
-        for (int i = 0; i < nterms; i++) {
-            if (fabs(ydiff[j + i * n]) >= 1e-6) {
-                svalsx[j + i * n] = yprods[j] / prods[i] / ydiff[j + i * n];
-            }
-            if (fabs(ydiff[j + i * n]) < 1e-6) {
-                svalsx[j + i * n] = 1 / prods[i];
-                for (int k = 0; k < nterms; k++) {
-                    if (i != k) {
-                        svalsx[j + i * n] = svalsx[j + i * n] * ydiff[j + k * n];
-                    }
+    auto *w_coeffs = new double[total_interpolation_points * n_terms]();
+    for (int i = 0; i < N; i++) {
+        int box_idx = point_box_idx[i];
+        int box_j = box_idx / n_boxes;
+        int box_i = box_idx % n_boxes;
+        for (int interp_i = 0; interp_i < n_interpolation_points; interp_i++) {
+            for (int interp_j = 0; interp_j < n_interpolation_points; interp_j++) {
+                // Compute the index of the point in the interpolation grid of points
+                int idx = (box_i * n_interpolation_points + interp_i) * (n_boxes * n_interpolation_points) +
+                          (box_j * n_interpolation_points) + interp_j;
+                for (int d = 0; d < n_terms; d++) {
+                    w_coeffs[idx * n_terms + d] +=
+                            y_interpolated_values[interp_j * N + i] *
+                            x_interpolated_values[interp_i * N + i] *
+                            chargesQij[i * n_terms + d];
                 }
             }
         }
     }
 
+    /*
+     * Step 2: Compute the values v_{m, n} at the equispaced nodes, multiply the kernel matrix with the coefficients w
+     */
+    auto *y_tilde_values = new double[total_interpolation_points * n_terms]();
+    int n_fft_coeffs_half = n_interpolation_points * n_boxes;
+    int n_fft_coeffs = 2 * n_interpolation_points * n_boxes;
+    auto *mpol_sort = new double[total_interpolation_points];
 
+    // FFT of fft_input
+    auto *fft_input = new double[n_fft_coeffs * n_fft_coeffs]();
+    auto *fft_w_coeffs = new complex<double>[n_fft_coeffs * (n_fft_coeffs / 2 + 1)];
+    auto *fft_output = new double[n_fft_coeffs * n_fft_coeffs]();
 
+    fftw_plan plan_dft, plan_idft;
+    plan_dft = fftw_plan_dft_r2c_2d(n_fft_coeffs, n_fft_coeffs, fft_input,
+                                    reinterpret_cast<fftw_complex *>(fft_w_coeffs), FFTW_ESTIMATE);
+    plan_idft = fftw_plan_dft_c2r_2d(n_fft_coeffs, n_fft_coeffs, reinterpret_cast<fftw_complex *>(fft_w_coeffs),
+                                     fft_output, FFTW_ESTIMATE);
 
+    for (int d = 0; d < n_terms; d++) {
+        for (int i = 0; i < total_interpolation_points; i++) {
+            mpol_sort[i] = w_coeffs[i * n_terms + d];
+        }
 
-    //L_j for y
-    for (int j = 0; j < n; j++) {
-        yprods[j] = 1;
-        for (int i = 0; i < nterms; i++) {
-            ydiff[j + i * n] = ysp[j] - xpts[i];
-            yprods[j] = yprods[j] * ydiff[j + i * n];
+        for (int i = 0; i < n_fft_coeffs_half; i++) {
+            for (int j = 0; j < n_fft_coeffs_half; j++) {
+                fft_input[i * n_fft_coeffs + j] = mpol_sort[i * n_fft_coeffs_half + j];
+            }
+        }
+
+        fftw_execute(plan_dft);
+
+        // Take the Hadamard product of two complex vectors
+        for (int i = 0; i < n_fft_coeffs * (n_fft_coeffs / 2 + 1); i++) {
+            double x_ = fft_w_coeffs[i].real();
+            double y_ = fft_w_coeffs[i].imag();
+            double u_ = fft_kernel_tilde[i].real();
+            double v_ = fft_kernel_tilde[i].imag();
+            fft_w_coeffs[i].real(x_ * u_ - y_ * v_);
+            fft_w_coeffs[i].imag(x_ * v_ + y_ * u_);
+        }
+
+        // Invert the computed values at the interpolated nodes
+        fftw_execute(plan_idft);
+        for (int i = 0; i < n_fft_coeffs_half; i++) {
+            for (int j = 0; j < n_fft_coeffs_half; j++) {
+                int row = n_fft_coeffs_half + i;
+                int col = n_fft_coeffs_half + j;
+
+                // FFTW doesn't perform IDFT normalization, so we have to do it ourselves. This is done by dividing
+                // the result with the number of points in the input
+                mpol_sort[i * n_fft_coeffs_half + j] = fft_output[row * n_fft_coeffs + col] /
+                                                       (double) (n_fft_coeffs * n_fft_coeffs);
+            }
+        }
+        for (int i = 0; i < n_fft_coeffs_half * n_fft_coeffs_half; i++) {
+            y_tilde_values[i * n_terms + d] = mpol_sort[i];
         }
     }
 
+    fftw_destroy_plan(plan_dft);
+    fftw_destroy_plan(plan_idft);
+    delete[] fft_w_coeffs;
+    delete[] fft_input;
+    delete[] fft_output;
+    delete[] mpol_sort;
 
-    double *svalsy = (double *) malloc(n * nterms * sizeof(double));
-    for (int j = 0; j < n; j++) {
-        for (int i = 0; i < nterms; i++) {
-            if (fabs(ydiff[j + i * n]) >= 1e-6) {
-                svalsy[j + i * n] = yprods[j] / prods[i] / ydiff[j + i * n];
-                //printf("svals[%d] = %lf\n", j+i*n, svals[j+i*n]);
-            }
-            if (fabs(ydiff[j + i * n]) < 1e-6) {
-                svalsy[j + i * n] = 1 / prods[i];
-                for (int k = 0; k < nterms; k++) {
-                    if (i != k) {
-                        svalsy[j + i * n] = svalsy[j + i * n] * ydiff[j + k * n];
-                    }
+    /*
+     * Step 3: Compute the potentials \tilde{\phi}
+     */
+    for (int i = 0; i < N; i++) {
+        int box_idx = point_box_idx[i];
+        int box_i = box_idx % n_boxes;
+        int box_j = box_idx / n_boxes;
+        for (int interp_i = 0; interp_i < n_interpolation_points; interp_i++) {
+            for (int interp_j = 0; interp_j < n_interpolation_points; interp_j++) {
+                for (int d = 0; d < n_terms; d++) {
+                    // Compute the index of the point in the interpolation grid of points
+                    int idx = (box_i * n_interpolation_points + interp_i) * (n_boxes * n_interpolation_points) +
+                              (box_j * n_interpolation_points) + interp_j;
+                    potentialQij[i * n_terms + d] +=
+                            x_interpolated_values[interp_i * N + i] *
+                            y_interpolated_values[interp_j * N + i] *
+                            y_tilde_values[idx * n_terms + d];
                 }
             }
         }
     }
-    for (int j = 0; j < 5; j++) {
-        //printf("svals: %f, %f\n", svalsx[j], svalsy[j]);
-    }
-
-
-    //Compute mpol, which is interpolation
-
-    double *mpol = (double *) calloc(sizeof(double), nn * ndim);
-    double *loc = (double *) calloc(sizeof(double), nn * ndim);
-
-    for (int ibox = 0; ibox < nboxes; ibox++) {
-        int istart = ibox * nterms * nterms;
-        for (int i = boxoffset[ibox]; i < boxoffset[ibox + 1]; i++) {
-            for (int idim = 0; idim < ndim; idim++) {
-                for (int impx = 0; impx < nterms; impx++) {
-                    for (int impy = 0; impy < nterms; impy++) {
-                        //printf("ibox: %d i:%d, idim: %d, imp: %d\n", ibox, i, idim, imp);
-                        int ii = (impx) * nterms + impy;
-                        mpol[idim + (istart + ii) * ndim] +=
-                                svalsy[impy * n + i] * svalsx[impx * n + i] * chargessort[idim * n + i];
-                        //printf("%d %f = %f*%f*%f\n",idim + (istart+ii)*ndim, mpol[idim + (istart+ii)*ndim], svalsx[impy*n + i],svalsy[impx*n + i], chargessort[idim*n+i]);
-                        //printf("mpol2[%d] = %lf\n", i, mpol[idim + (istart+imp)*ndim]);
-                    }
-                }
-            }
-        }
-    }
-
-    //Mpol to loc
-
-    int nfourh = nterms * nlat;
-    int nfour = 2 * nterms * nlat;
-
-    for (int idim = 0; idim < ndim; idim++) {
-        double *mpolsort = (double *) calloc(sizeof(double), nn);
-        for (int i = 0; i < nn; i++) {
-            mpolsort[irearr[i]] = mpol[i * ndim + idim];
-        }
-        for (int j = 0; j < 100; j++) {
-            //	printf("mpolsort[%d]=%lf\n",j, mpolsort[j]);
-        }
-
-        double *zmpol = (double *) calloc(sizeof(double), nfour * nfour);
-        for (int i = 0; i < nfourh; i++) {
-            for (int j = 0; j < nfourh; j++) {
-                int ii = i * nfourh + j;
-                zmpol[i * nfour + j] = mpolsort[ii];
-                //printf("zmpol[%d,%d] = %lf\n", i,j , mpolsort[ii]);
-            }
-        }
-
-
-        fftw_plan p, p2;
-        //FFT of zmpol
-        //printf("doing %d, by %d\n", nfour, nfour);
-        //fftw_complex * zmpoli = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * nfour*nfour);
-        //fftw_complex * zmpolf = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * nfour*nfour);
-        //p = fftw_plan_dft_2d(nfour,nfour, zmpoli, zmpolf, FFTW_FORWARD, FFTW_ESTIMATE);
-        //p2 = fftw_plan_dft_2d(nfour,nfour, zmpolf, zmpolf, FFTW_BACKWARD, FFTW_ESTIMATE);
-
-        //fftw_import_wisdom_from_string(wisdom_string);
-
-        double *zmpoli = (double *) fftw_malloc(sizeof(fftw_complex) * nfour * nfour);
-        fftw_complex *zmpolf = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * nfour * (nfour / 2 + 1));
-        double *zmpolfo = (double *) fftw_malloc(sizeof(fftw_complex) * nfour * nfour);
-        p = fftw_plan_dft_r2c_2d(nfour, nfour, zmpoli, zmpolf, FFTW_ESTIMATE);
-        p2 = fftw_plan_dft_c2r_2d(nfour, nfour, zmpolf, zmpolfo, FFTW_ESTIMATE);
-        //wisdom_string = fftw_export_wisdom_to_string();
-
-
-        for (int i = 0; i < nfour * nfour; i++) {
-            zmpoli[i] = 0;
-        }
-        for (int i = 0; i < nfour * nfour; i++) {
-            zmpoli[i] = zmpol[i];
-        }
-
-        fftw_execute(p);
-
-        //Take hadamard product
-
-        for (int i = 0; i < nfour * (nfour / 2 + 1); i++) {
-            //(x_ + y_*i) * (u_ + v_*i) = (x*u - y*v) + (x*v+y*u)i
-            double x_ = zmpolf[i][0];
-            double y_ = zmpolf[i][1];
-            double u_ = zkvalf[i][0];
-            double v_ = zkvalf[i][1];
-            zmpolf[i][0] = (x_ * u_ - y_ * v_);
-            zmpolf[i][1] = (x_ * v_ + y_ * u_);
-            //printf("(%lf + %lfi) (%lf + %lfi) = %lf + %lfi\n", x_, y_, u_,v_, zmpolf[i][0], zmpolf[i][1]);
-        }
-        for (int i = 0; i < 5; i++) {
-            for (int j = 0; j < 5; j++) {
-                //printf("before zmpolf[%d,%d : %lf\n ", i,j, zmpolf[i*nfour+j][0]);
-            }
-        }
-
-        //Inverse it!
-        fftw_execute(p2);
-        for (int i = 0; i < nfour; i++) {
-            for (int j = 0; j < nfour; j++) {
-                //printf("zmpolf[%d,%d : %lf\n ", i,j, zmpolf[i*nfour+j][0]/(double)(nfour*nfour));
-                //printf("%0.4e,  ", zmpolf[i*nfour+j][0]/(double)(nfour*nfour));
-            }
-            //printf("\n%d", i+1);
-            //	printf("\n", i+1);
-        }
-
-        for (int i = 0; i < nfourh; i++) {
-            for (int j = 0; j < nfourh; j++) {
-                int ii = i * nfourh + j;
-                int rowval = (nfourh + i);
-                int colval = (nfourh + j);
-
-                mpolsort[ii] = zmpolfo[rowval * nfour + colval] / (double) (nfour * nfour);
-                //printf("%d row: %d col %d is %lf\n", ii, rowval, colval, mpolsort[ii]);
-            }
-        }
-        for (int i = 0; i < nfourh * nfourh; i++) {
-            loc[i * ndim + idim] = mpolsort[irearr[i]];
-            //printf("loc[%d]: %lf\n", i, loc[i]);
-        }
-
-        fftw_free(zmpoli);
-        fftw_free(zmpolf);
-        fftw_destroy_plan(p);
-        fftw_destroy_plan(p2);
-        free(zmpol);
-        free(mpolsort);
-    }
-    double *pot = (double *) calloc(n * ndim, sizeof(double));
-    for (int ibox = 0; ibox < nboxes; ibox++) {
-        int istart = ibox * nterms * nterms;
-        for (int i = boxoffset[ibox]; i < boxoffset[ibox + 1]; i++) {
-            for (int idim = 0; idim < ndim; idim++) {
-                //outpot[i*ndim +idim] = 0;
-                for (int j = 0; j < nterms; j++) {
-                    for (int l = 0; l < nterms; l++) {
-                        int ii = j * nterms + l;
-                        pot[i * ndim + idim] +=
-                                svalsx[j * n + i] * svalsy[l * n + i] * loc[(istart + ii) * ndim + idim];
-                    }
-                }
-            }
-        }
-    }
-
-    for (int i = 0; i < n; i++) {
-        //printf("pot[%d]= %lf\n", i, pot[i]);
-    }
-
-    for (int i = 0; i < n; i++) {
-        for (int j = 0; j < ndim; j++) {
-            outpot[j * n + iarr[i]] = pot[i * ndim + j];
-        }
-    }
-    free(boxcount);
-    free(boxcounti);
-    free(boxsort);
-    free(iarr);
-    free(chargessort);
-    free(boxoffset);
-    free(ydiff);
-    free(yprods);
-    free(svalsx);
-    free(svalsy);
-    free(mpol);
-    free(loc);
-    free(pot);
-    free(xsort);
-    free(ysort);
-    free(xsp);
-    free(ysp);
-
-    return 1;
+    delete[] point_box_idx;
+    delete[] x_interpolated_values;
+    delete[] y_interpolated_values;
+    delete[] w_coeffs;
+    delete[] y_tilde_values;
+    delete[] x_in_box;
+    delete[] y_in_box;
 }
 
 
-int precompute(double rmin, double rmax, int nboxes, int nterms, kerneltype ker, double *band, double *boxl,
-               double *boxr, double *prods, double *xpts, double *xptsall, fftw_complex *zkvalf) {
+void precompute(double y_min, double y_max, int n_boxes, int n_interpolation_points, kernel_type kernel,
+                double *box_lower_bounds, double *box_upper_bounds, double *y_tilde_spacing, double *y_tilde,
+                complex<double> *fft_kernel_vector) {
     /*
      * Set up the boxes
      */
-    double boxwidth = (rmax - rmin) / (double) nboxes;
-
-    //Left and right bounds of each box
-
-
-    int nn = nterms * nboxes;
-    if (boxl == NULL) {
-        printf("Malloc failed\n");
-        exit(-1);
+    double box_width = (y_max - y_min) / (double) n_boxes;
+    // Left and right bounds of each box
+    for (int box_idx = 0; box_idx < n_boxes; box_idx++) {
+        box_lower_bounds[box_idx] = box_idx * box_width + y_min;
+        box_upper_bounds[box_idx] = (box_idx + 1) * box_width + y_min;
     }
 
-    for (int boxi = 0; boxi < nboxes; boxi++) {
-        boxl[boxi] = boxi * boxwidth + rmin;
-        boxr[boxi] = (boxi + 1) * (boxwidth) + rmin;
-        //printf("box %d, %lf to %lf\n", boxi, boxl[boxi], boxr[boxi]);
+    int total_interpolation_points = n_interpolation_points * n_boxes;
+    // Coordinates of each equispaced interpolation point for a single box. This equally spaces them between [0, 1]
+    // with equal space between the points and half that space between the boundary point and the closest boundary point
+    // e.g. [0.1, 0.3, 0.5, 0.7, 0.9] with spacings [0.1, 0.2, 0.2, 0.2, 0.2, 0.1], respectively. This ensures that the
+    // nodes will still be equispaced across box boundaries
+    double h = 1 / (double) n_interpolation_points;
+    y_tilde_spacing[0] = h / 2;
+    for (int i = 1; i < n_interpolation_points; i++) {
+        y_tilde_spacing[i] = y_tilde_spacing[i - 1] + h;
     }
 
-    //Coordinates of each (equispaced) interpolation node for a single box
-    double h = 2 / (double) nterms;
-    xpts[0] = -1 + h / 2.0;
-    for (int i = 1; i < nterms; i++) {
-        xpts[i] = xpts[0] + (i) * h;
+    // Coordinates of all the equispaced interpolation points
+    h = h * box_width;
+    y_tilde[0] = y_min + h / 2;
+    for (int i = 1; i < total_interpolation_points; i++) {
+        y_tilde[i] = y_tilde[i - 1] + h;
     }
+
     /*
-     * Interpolate kernel using lagrange polynomials
+     * Evaluate the kernel at the interpolation nodes and form the embedded generating kernel vector for a circulant
+     * matrix
      */
-
-    //Get the denominators for the lagrange polynomials (this is getprods())
-    for (int i = 0; i < nterms; i++) {
-        prods[i] = 1;
-        for (int j = 0; j < nterms; j++) {
-            if (i != j) {
-                prods[i] = prods[i] * (xpts[i] - xpts[j]);
-            }
-        }
-//		printf("Prods[%d] xpts[%d] = %lf, %lf\n", i,i, prods[i], xpts[i]);
+    auto *kernel_vector = new complex<double>[2 * total_interpolation_points]();
+    // Compute the generating vector x between points K(y_i, y_j) where i = 0, j = 0:N-1
+    // [0 0 0 0 0 5 4 3 2 1] for linear kernel
+    // This evaluates the Cauchy kernel centered on y_tilde[0] to all the other points
+    for (int i = 0; i < total_interpolation_points; i++) {
+        kernel_vector[total_interpolation_points + i].real(kernel(y_tilde[0], y_tilde[i]));
+    }
+    // This part symmetrizes the vector, this embeds the Toeplitz generating vector into the circulant generating vector
+    // but also has the nice property of symmetrizing the Cauchy kernel, which is probably planned
+    // [0 1 2 3 4 5 4 3 2 1] for linear kernel
+    for (int i = 1; i < total_interpolation_points; i++) {
+        kernel_vector[i].real(kernel_vector[2 * total_interpolation_points - i].real());
     }
 
-
-    //Coordinates of each (equispaced) interpolation node for all boxes
-    int ii = 0;
-    for (int i = 0; i < nboxes; i++) {
-        for (int j = 0; j < nterms; j++) {
-            xptsall[ii] = boxl[i] + (xpts[j] + 1) / (double) 2.0 * boxwidth;
-            //printf("%d xptsall %lf\n", ii, xptsall[ii]);
-            ii++;
-        }
-    }
-
-    //Kernel evaluated at interpolation nodes. Make it circulant
-    double *zkval = (double *) calloc(2 * nn, sizeof(double));
-    for (int i = 0; i < nn; i++) {
-        zkval[i] = 0;
-        //zkval[i+nn] = 1/(1+pow(xptsall[1] - xptsall[i],2));
-        zkval[i + nn] = ker(xptsall[0], xptsall[i], band[i], band[i]);
-    }
-    zkval[0] = 0;
-    for (int i = 1; i < nn; i++) {
-        zkval[i] = zkval[2 * nn - i];
-    }
-
-    //FFT of the kernel
-    fftw_complex *zkvali = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * 2 * nn);
-    for (int i = 0; i < 2 * nn; i++) {
-        zkvali[i][0] = 0;
-        zkvali[i][1] = 0;
-    }
-
-    for (int i = 1; i < 2 * nn; i++) {
-        zkvali[i][0] = zkval[i];
-    }
-
-    fftw_plan p;
-    p = fftw_plan_dft_1d(2 * nn, zkvali, zkvalf, FFTW_FORWARD, FFTW_ESTIMATE);
+    // Precompute the FFT of the kernel generating vector
+    fftw_plan p = fftw_plan_dft_1d(2 * total_interpolation_points, reinterpret_cast<fftw_complex *>(kernel_vector),
+                                   reinterpret_cast<fftw_complex *>(fft_kernel_vector), FFTW_FORWARD, FFTW_ESTIMATE);
     fftw_execute(p);
-
     fftw_destroy_plan(p);
-    fftw_free(zkvali);
-    free(zkval);
-    //fftw_free(zkvalo);  don't forget to do this
 
-    //The rest of this should be in a separate function...
-
-    return 1;
+    delete[] kernel_vector;
 }
 
 
-int nbodyfft(int n, int ndim, double *locs, double *charges, int nboxes, int nterms, double *boxl, double *boxr,
-             double *prods, double *xpts, double *xptsall, fftw_complex *zkvalf, double *outpot) {
-
-    int nn = nterms * nboxes;
-    double rmin = boxl[0];
-    double boxwidth = boxr[0] - boxl[0];
-
-    int *boxoffset = (int *) malloc((nboxes + 1) * sizeof(int));
-    int *boxcount = (int *) calloc((nboxes + 1), sizeof(int));
-    int *boxcounti = (int *) calloc(nboxes + 1, sizeof(int));
-    if (boxcount == NULL) {
-        printf("Malloc failed\n");
-        exit(-1);
-    }
-
-
-    int *boxsort = (int *) malloc(n * sizeof(int));
-    int *iarr = (int *) malloc(n * sizeof(int));
-    double *chargessort = (double *) malloc(ndim * n * sizeof(double));
-
-    //Initialize the charges and the locations
-    for (int i = 0; i < n; i++) {
-        int ibox = (locs[i] - rmin) / boxwidth;
-        if (ibox >= nboxes) {
-            ibox = nboxes - 1;
+void interpolate(int n_interpolation_points, int N, const double *y_in_box, const double *y_tilde_spacings,
+                 double *interpolated_values) {
+    // The denominators are the same across the interpolants, so we only need to compute them once
+    auto *denominator = new double[n_interpolation_points];
+    for (int i = 0; i < n_interpolation_points; i++) {
+        denominator[i] = 1;
+        for (int j = 0; j < n_interpolation_points; j++) {
+            if (i != j) {
+                denominator[i] *= y_tilde_spacings[i] - y_tilde_spacings[j];
+            }
         }
-        if (ibox < 0) {
-            ibox = 0;
+    }
+    // Compute the numerators and the interpolant value
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < n_interpolation_points; j++) {
+            interpolated_values[j * N + i] = 1;
+            for (int k = 0; k < n_interpolation_points; k++) {
+                if (j != k) {
+                    interpolated_values[j * N + i] *= y_in_box[i] - y_tilde_spacings[k];
+                }
+            }
+            interpolated_values[j * N + i] /= denominator[j];
         }
-        boxsort[i] = ibox;
-        boxcount[ibox] = boxcount[ibox] + 1;
-        //printf("%d: %f, in box %d, %.2f - %.2f which has %d\n", i, locs[i], ibox, boxl[ibox], boxr[ibox],boxcount[ibox]);
     }
 
+    delete[] denominator;
+}
 
-    //boxsort[i] = ibox: the box for the ith point
-    //Set the offset of each box
-    boxoffset[0] = 0;
-    for (int ibox = 1; ibox < nboxes + 1; ibox++) {
-        boxoffset[ibox] = boxoffset[ibox - 1] + boxcount[ibox - 1];
+
+void nbodyfft(int N, int n_terms, double *Y, double *chargesQij, int n_boxes, int n_interpolation_points,
+              double *box_lower_bounds, double *box_upper_bounds, double *y_tilde_spacings, double *y_tilde,
+              complex<double> *fft_kernel_vector, double *potentialsQij) {
+    int total_interpolation_points = n_interpolation_points * n_boxes;
+
+    double coord_min = box_lower_bounds[0];
+    double box_width = box_upper_bounds[0] - box_lower_bounds[0];
+
+    // Determine which box each point belongs to
+    auto *point_box_idx = new int[N];
+    for (int i = 0; i < N; i++) {
+        auto box_idx = static_cast<int>((Y[i] - coord_min) / box_width);
+        // The right most point maps directly into `n_boxes`, while it should belong to the last box
+        if (box_idx >= n_boxes) {
+            box_idx = n_boxes - 1;
+        }
+        point_box_idx[i] = box_idx;
     }
 
-    for (int ibox = 0; ibox < nboxes; ibox++) {
-        boxcounti[ibox] = 0;
-    }
-
-    //The number of points in each box (so far)
-    for (int i = 0; i < n; i++) {
-        int ibox = boxsort[i];
-        int indx = boxoffset[ibox] + boxcounti[ibox];
-        iarr[indx] = i;
-        boxcounti[ibox] = boxcounti[ibox] + 1;
-        //	printf("%f, iarr[%d] = %d, ibox = %d, boxoffset[ibox] = %d, boxcounti[ibox] = %d\n", locs[iarr[indx]], indx,i,ibox, boxoffset[ibox], boxcounti[ibox]);
+    // Compute the relative position of each point in its box in the interval [0, 1]
+    auto *y_in_box = new double[N];
+    for (int i = 0; i < N; i++) {
+        int box_idx = point_box_idx[i];
+        double box_min = box_lower_bounds[box_idx];
+        y_in_box[i] = (Y[i] - box_min) / box_width;
     }
 
     /*
-       for (int i=0; i<n; i++){
-       int ibox = boxsort[iarr[i]];
-       printf("%d (%d): %f, in box %d, %.2f - %.2f which has %d\n", i,iarr[i], locs[iarr[i]], ibox, boxl[ibox], boxr[ibox],boxcount[ibox]);
-       }
-       */
+     * Step 1: Interpolate kernel using Lagrange polynomials and compute the w coefficients
+     */
+    // Compute the interpolated values at each real point with each Lagrange polynomial
+    auto *interpolated_values = new double[n_interpolation_points * N];
+    interpolate(n_interpolation_points, N, y_in_box, y_tilde_spacings, interpolated_values);
 
-    //Locsort
-
-    //FILE *f = fopen("iarr.txt", "w");
-    double *xs = (double *) malloc(n * sizeof(double));
-    for (int i = 0; i < n; i++) {
-        xs[i] = locs[iarr[i]];
-        //fprintf(f, "%d,", iarr[i]);
-        for (int idim = 0; idim < ndim; idim++) {
-            chargessort[idim * n + i] = charges[idim * n + iarr[i]];
-        }
-    }
-
-    for (int i = 0; i < 10; i++) {
-        //printf("Charge %d at %f, sorted %f: %f, sorted; %f\n", i, locs[i], xs[i], charges[i], chargessort[0*n+i]);
-    }
-
-
-
-    //tlocssort is the translated locations
-    double *xsp = (double *) malloc(n * sizeof(double));
-    for (int ibox = 0; ibox < nboxes; ibox++) {
-        for (int i = boxoffset[ibox]; i < boxoffset[ibox + 1]; i++) {
-            double xmin = boxl[ibox];
-            double xmax = boxr[ibox];
-            xsp[i] = ((xs[i] - xmin) / (xmax - xmin)) * 2 - 1;
-            //		printf("i %d locs[i] %f tlocssort[i] %f xmin %f xmax %f\n", i, xs[i], xsp[i], xmin, xmax);
-        }
-    }
-
-
-    //Get the L_j vals
-
-    double *ydiff = (double *) malloc(n * nterms * sizeof(double));
-    double *yprods = (double *) malloc(n * nterms * sizeof(double));
-    for (int j = 0; j < n; j++) {
-        yprods[j] = 1;
-        for (int i = 0; i < nterms; i++) {
-            ydiff[j + i * n] = xsp[j] - xpts[i];
-            yprods[j] = yprods[j] * ydiff[j + i * n];
-        }
-    }
-
-
-    double *svals = (double *) malloc(n * nterms * sizeof(double));
-    for (int j = 0; j < n; j++) {
-        for (int i = 0; i < nterms; i++) {
-            if (fabs(ydiff[j + i * n]) >= 1e-6) {
-                svals[j + i * n] = yprods[j] / prods[i] / ydiff[j + i * n];
-                //printf("svals[%d] = %lf\n", j+i*n, svals[j+i*n]);
-            }
-            if (fabs(ydiff[j + i * n]) < 1e-6) {
-                svals[j + i * n] = 1 / prods[i];
-                for (int k = 0; k < nterms; k++) {
-                    if (i != k) {
-                        svals[j + i * n] = svals[j + i * n] * ydiff[j + k * n];
-                    }
-                }
+    auto *w_coeffs = new double[total_interpolation_points * n_terms]();
+    for (int i = 0; i < N; i++) {
+        int box_idx = point_box_idx[i] * n_interpolation_points;
+        for (int interp_idx = 0; interp_idx < n_interpolation_points; interp_idx++) {
+            for (int d = 0; d < n_terms; d++) {
+                w_coeffs[(box_idx + interp_idx) * n_terms + d] +=
+                        interpolated_values[interp_idx * N + i] * chargesQij[i * n_terms + d];
             }
         }
     }
 
+    // `embedded_w_coeffs` is just a vector of zeros prepended to `w_coeffs`, this (probably) matches the dimensions of
+    // the kernel matrix K and since we embedded the generating vector by prepending values, we have to do the same here
+    auto *embedded_w_coeffs = new double[2 * total_interpolation_points * n_terms]();
+    for (int i = 0; i < total_interpolation_points; i++) {
+        for (int d = 0; d < n_terms; d++) {
+            embedded_w_coeffs[(total_interpolation_points + i) * n_terms + d] = w_coeffs[i * n_terms + d];
+        }
+    }
 
-    //Compute mpol, which is interpolation
+    /*
+     * Step 2: Compute the values v_{m, n} at the equispaced nodes, multiply the kernel matrix with the coefficients w
+     */
+    auto *fft_w_coeffs = new complex<double>[2 * total_interpolation_points];
+    auto *y_tilde_values = new double[total_interpolation_points * n_terms]();
 
-    double *mpol = (double *) calloc(sizeof(double), nn * ndim);
-    double *loc = (double *) calloc(sizeof(double), nn * ndim);
+    fftw_plan plan_dft, plan_idft;
+    plan_dft = fftw_plan_dft_1d(2 * total_interpolation_points, reinterpret_cast<fftw_complex *>(fft_w_coeffs),
+                                reinterpret_cast<fftw_complex *>(fft_w_coeffs), FFTW_FORWARD, FFTW_ESTIMATE);
+    plan_idft = fftw_plan_dft_1d(2 * total_interpolation_points, reinterpret_cast<fftw_complex *>(fft_w_coeffs),
+                                 reinterpret_cast<fftw_complex *>(fft_w_coeffs), FFTW_BACKWARD, FFTW_ESTIMATE);
 
-    for (int ibox = 0; ibox < nboxes; ibox++) {
-        int istart = ibox * nterms;
-        for (int i = boxoffset[ibox]; i < boxoffset[ibox + 1]; i++) {
-            for (int idim = 0; idim < ndim; idim++) {
-                for (int imp = 0; imp < nterms; imp++) {
-                    //printf("ibox: %d i:%d, idim: %d, imp: %d\n", ibox, i, idim, imp);
-                    mpol[idim + (istart + imp) * ndim] += svals[imp * n + i] * chargessort[idim * n + i];
-                    //printf("mpol2[%d] = %lf\n", i, mpol[idim + (istart+imp)*ndim]);
-                }
+    for (int d = 0; d < n_terms; d++) {
+        for (int i = 0; i < 2 * total_interpolation_points; i++) {
+            fft_w_coeffs[i].real(embedded_w_coeffs[i * n_terms + d]);
+        }
+        fftw_execute(plan_dft);
+
+        // Take the Hadamard product of two complex vectors
+        for (int i = 0; i < 2 * total_interpolation_points; i++) {
+            double x_ = fft_w_coeffs[i].real();
+            double y_ = fft_w_coeffs[i].imag();
+            double u_ = fft_kernel_vector[i].real();
+            double v_ = fft_kernel_vector[i].imag();
+            fft_w_coeffs[i].real(x_ * u_ - y_ * v_);
+            fft_w_coeffs[i].imag(x_ * v_ + y_ * u_);
+        }
+
+        // Invert the computed values at the interpolated nodes, unfortunate naming but it's better to do IDFT inplace
+        fftw_execute(plan_idft);
+
+        for (int i = 0; i < total_interpolation_points; i++) {
+            // FFTW doesn't perform IDFT normalization, so we have to do it ourselves. This is done by multiplying the
+            // result with the number of points in the input
+            y_tilde_values[i * n_terms + d] = fft_w_coeffs[i].real() / (total_interpolation_points * 2.0);
+        }
+    }
+
+    fftw_destroy_plan(plan_dft);
+    fftw_destroy_plan(plan_idft);
+    delete[] fft_w_coeffs;
+
+    /*
+     * Step 3: Compute the potentials \tilde{\phi}
+     */
+    for (int i = 0; i < N; i++) {
+        int box_idx = point_box_idx[i] * n_interpolation_points;
+        for (int j = 0; j < n_interpolation_points; j++) {
+            for (int d = 0; d < n_terms; d++) {
+                potentialsQij[i * n_terms + d] +=
+                        interpolated_values[j * N + i] * y_tilde_values[(box_idx + j) * n_terms + d];
             }
         }
     }
 
-    //Mpol to loc
-    double *zmpol = (double *) calloc(sizeof(double), 2 * nn * ndim);
-    for (int i = 0; i < nn; i++) {
-        for (int idim = 0; idim < ndim; idim++) {
-            zmpol[(i + nn) * ndim + idim] = mpol[(i) * ndim + idim];
-            //printf("zmpol[%d] = %lf\n", (i)*ndim + idim, mpol[(i)*ndim + idim]);
-        }
-    }
-
-
-    fftw_plan p;
-    //FFT of zmpol
-    for (int idim = 0; idim < ndim; idim++) {
-        fftw_complex *zmpoli = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * 2 * nn);
-        fftw_complex *zmpolf = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * 2 * nn);
-        for (int i = 0; i < 2 * nn; i++) {
-            zmpoli[i][0] = 0;
-            zmpoli[i][1] = 0;
-        }
-        for (int i = 0; i < 2 * nn; i++) {
-            zmpoli[i][0] = zmpol[i * ndim + idim];
-            //printf("zmpoli[i][0] =%lf\n", zmpoli[i][0]);
-        }
-
-        p = fftw_plan_dft_1d(2 * nn, zmpoli, zmpolf, FFTW_FORWARD, FFTW_ESTIMATE);
-        fftw_execute(p);
-
-        fftw_destroy_plan(p);
-        fftw_free(zmpoli);
-
-        //Take hadamard product
-
-        for (int i = 0; i < 2 * nn; i++) {
-            //(x_ + y_*i) * (u_ + v_*i) = (x*u - y*v) + (x*v+y*u)i
-            double x_ = zmpolf[i][0];
-            double y_ = zmpolf[i][1];
-            double u_ = zkvalf[i][0];
-            double v_ = zkvalf[i][1];
-            zmpolf[i][0] = (x_ * u_ - y_ * v_);
-            zmpolf[i][1] = (x_ * v_ + y_ * u_);
-            //		printf("(%lf + %lfi) (%lf + %lfi) = %lf + %lfi\n", x_, y_, u_,v_, zmpolf[i][0], zmpolf[i][1]);
-        }
-
-        //Inverse it!
-        p = fftw_plan_dft_1d(2 * nn, zmpolf, zmpolf, FFTW_BACKWARD, FFTW_ESTIMATE);
-        fftw_execute(p);
-        fftw_destroy_plan(p);
-        for (int i = 0; i < nn; i++) {
-            loc[i * ndim + idim] = zmpolf[i][0] / (double) (nn * 2.0);
-        }
-        fftw_free(zmpolf);
-    }
-    //printf("Per iteration FFTW took:  %.2e seconds, so %.2e per second\n", time_spent, n/time_spent);
-
-    double *pot = (double *) calloc(n * ndim, sizeof(double));
-    for (int ibox = 0; ibox < nboxes; ibox++) {
-        int istart = ibox * nterms;
-        for (int i = boxoffset[ibox]; i < boxoffset[ibox + 1]; i++) {
-            for (int idim = 0; idim < ndim; idim++) {
-                outpot[i * ndim + idim] = 0;
-                for (int j = 0; j < nterms; j++) {
-                    pot[i * ndim + idim] += svals[j * n + i] * loc[(istart + j) * ndim + idim];
-                }
-            }
-        }
-    }
-
-
-    for (int i = 0; i < n; i++) {
-        for (int j = 0; j < ndim; j++) {
-            outpot[j * n + iarr[i]] = pot[i * ndim + j];
-        }
-    }
-    free(boxoffset);
-    free(boxcount);
-    free(boxcounti);
-    free(boxsort);
-    free(iarr);
-    free(chargessort);
-    free(xs);
-    free(xsp);
-    free(ydiff);
-    free(yprods);
-    free(svals);
-    free(mpol);
-    free(loc);
-    free(zmpol);
-    free(pot);
-    return 1;
-
+    delete[] point_box_idx;
+    delete[] y_in_box;
+    delete[] interpolated_values;
+    delete[] w_coeffs;
+    delete[] y_tilde_values;
+    delete[] embedded_w_coeffs;
 }
-

@@ -41,7 +41,7 @@ class TSNE {
 public:
     int run(double *X, int N, int D, double *Y, int no_dims, double perplexity, double theta, int rand_seed,
             bool skip_random_init, int max_iter, int stop_lying_iter, int mom_switch_iter, int K, double sigma,
-            int nbody_algo, int knn_algo, double early_exag_coeff, double *initialError, double *costs,
+            int nbody_algorithm, int knn_algo, double early_exag_coeff, double *initialError, double *costs,
             bool no_momentum_during_exag, int start_late_exag_iter, double late_exag_coeff, int n_trees, int search_k,
             int nterms, double intervals_per_integer, int min_num_intervals, unsigned int nthreads, int load_affinities);
 
@@ -63,11 +63,11 @@ private:
                          int N, int D, double *dC, double theta);
 
     void computeFftGradient(double *P, unsigned int *inp_row_P, unsigned int *inp_col_P, double *inp_val_P, double *Y,
-                            int N, int D, double *dC, double theta, int nterms, double intervals_per_integer,
+                            int N, int D, double *dC, double theta, int n_interpolation_points, double intervals_per_integer,
                             int min_num_intervals);
 
     void computeFftGradientOneD(double *P, unsigned int *inp_row_P, unsigned int *inp_col_P, double *inp_val_P,
-                                double *Y, int N, int D, double *dC, double theta, int nterms,
+                                double *Y, int N, int D, double *dC, double theta, int n_interpolation_points,
                                 double intervals_per_integer, int min_num_intervals);
 
     void computeExactGradient(double *P, double *Y, int N, int D, double *dC);

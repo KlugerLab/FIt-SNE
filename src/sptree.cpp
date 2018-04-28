@@ -245,7 +245,6 @@ bool SPTree::insert(unsigned int new_index) {
 
 // Create four children which fully divide this cell into four quads of equal area
 void SPTree::subdivide() {
-
     // Create new children
     double *new_corner = (double *) malloc(dimension * sizeof(double));
     double *new_width = (double *) malloc(dimension * sizeof(double));
@@ -305,7 +304,6 @@ void SPTree::getAllIndices(unsigned int *indices) {
 
 // Build a list of all indices in SPTree
 unsigned int SPTree::getAllIndices(unsigned int *indices, unsigned int loc) {
-
     // Gather indices in current quadrant
     for (unsigned int i = 0; i < size; i++) indices[loc + i] = index[i];
     loc += size;
@@ -328,7 +326,6 @@ unsigned int SPTree::getDepth() {
 
 // Compute non-edge forces using Barnes-Hut algorithm
 void SPTree::computeNonEdgeForces(unsigned int point_index, double theta, double neg_f[], double *sum_Q) {
-
     // Make sure that we spend no time on empty nodes or self-interactions
     if (cum_size == 0 || (is_leaf && size == 1 && index[0] == point_index)) return;
 
@@ -346,7 +343,6 @@ void SPTree::computeNonEdgeForces(unsigned int point_index, double theta, double
         max_width = (max_width > cur_width) ? max_width : cur_width;
     }
     if (is_leaf || max_width / sqrt(D) < theta) {
-
         // Compute and add t-SNE force between point and current node
         D = 1.0 / (1.0 + D);
         double mult = cum_size * D;
@@ -354,7 +350,6 @@ void SPTree::computeNonEdgeForces(unsigned int point_index, double theta, double
         mult *= D;
         for (unsigned int d = 0; d < dimension; d++) neg_f[d] += mult * buff[d];
     } else {
-
         // Recursively apply Barnes-Hut to children
         for (unsigned int i = 0; i < no_children; i++)
             children[i]->computeNonEdgeForces(point_index, theta, neg_f, sum_Q);
@@ -364,14 +359,12 @@ void SPTree::computeNonEdgeForces(unsigned int point_index, double theta, double
 
 // Computes edge forces
 void SPTree::computeEdgeForces(unsigned int *row_P, unsigned int *col_P, double *val_P, int N, double *pos_f) {
-
     // Loop over all edges in the graph
     unsigned int ind1 = 0;
     unsigned int ind2 = 0;
     double D;
     for (unsigned int n = 0; n < N; n++) {
         for (unsigned int i = row_P[n]; i < row_P[n + 1]; i++) {
-
             // Compute pairwise distance and Q-value
             D = 1.0;
             ind2 = col_P[i] * dimension;
@@ -379,16 +372,10 @@ void SPTree::computeEdgeForces(unsigned int *row_P, unsigned int *col_P, double 
             for (unsigned int d = 0; d < dimension; d++) D += buff[d] * buff[d];
             D = val_P[i] / D;
 
-            if (n < 5) {
-                //	    printf("Inner SP Tree BH n: %d, data[ind1]: %le, data[ind2]: %le :\n", n, data[ind1], data[ind2]);
-            }
             // Sum positive force
             for (unsigned int d = 0; d < dimension; d++) pos_f[ind1 + d] += D * buff[d];
         }
         ind1 += dimension;
-        if (n < 10) {
-            //	printf("BH Positive term of the %dth is %le,%le\n",n, pos_f[n*2], pos_f[n*2+1] );
-        }
     }
 }
 

@@ -171,10 +171,10 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
     }
 
     // Compute input similarities for exact t-SNE
-    double *P;
-    unsigned int *row_P;
-    unsigned int *col_P;
-    double *val_P;
+    double *P = nullptr;
+    unsigned int *row_P = nullptr;
+    unsigned int *col_P = nullptr;
+    double *val_P = nullptr;
     if (exact) {
 		// Loading input similarities if load_affinities == 1
 		if (load_affinities == 1) {
