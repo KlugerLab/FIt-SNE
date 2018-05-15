@@ -448,6 +448,7 @@ int nbodyfft2(int n, int ndim, double* xs, double *ys, double * charges, int
 
 		fftw_free(zmpoli);  
 		fftw_free(zmpolf);  
+		fftw_free(zmpolfo);
 		fftw_destroy_plan(p);
 		fftw_destroy_plan(p2);
 		free(zmpol);
