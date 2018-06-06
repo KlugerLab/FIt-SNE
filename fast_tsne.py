@@ -5,6 +5,11 @@ import numpy as np
 
 # This is really basic function that does not do any sanity checks
 # It assumes that fast_tsne.py and fast_tsne binary are both in the working directory
+#
+# Usage example:
+#	from fast_tsne import fast_tsne
+#	X = np.random.randn(1000, 50)
+#	fast_tsne(X, perplexity = 30)
 
 def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000, 
               stop_lying_iter=200, K=-1, sigma=-30, nbody_algo='FFT', knn_algo='annoy',
