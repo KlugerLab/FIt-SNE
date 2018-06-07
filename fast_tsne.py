@@ -19,7 +19,10 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
               seed=-1, initialization=None):
     
     if search_k is None:
-        search_k = 3 * perplexity * n_trees
+        if perplexity > 0:
+            search_k = 3 * perplexity * n_trees
+        else:
+            search_k = 3 * K * n_trees
         
     if nbody_algo == 'Barnes-Hut':
         nbody_algo = 1
