@@ -1040,10 +1040,8 @@ int TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row
 
 		if (perplexity >0 ) {
 			printf("Calculating dynamic kernels using perplexity \n");
-			printf("K = %d and search_k = %d and nthreads = %d\n", K, search_k, nthreads);
 		}else {
 			printf("Using sigma = %lf\n", sigma);
-			printf("K = %d and search_k = %d and nthreads = %d\n", K, search_k, nthreads);
 		}
 		//Check if it returns enough neighbors
 		std::vector<int> closest;
@@ -1056,8 +1054,6 @@ int TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row
 				return -1;
 			}
 		}
-
-		printf("check done\n");
 
 		if (nthreads == 0) {
 			nthreads = std::thread::hardware_concurrency();
