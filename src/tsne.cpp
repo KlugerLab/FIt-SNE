@@ -980,7 +980,7 @@ int TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row
 			return -2;
 		}
 
-		size_t result; // need this to get rid of warning that otherwise appear
+		size_t result; // need this to get rid of warnings that otherwise appear
 		result = fread(val_P, sizeof(double), N * K, h);
 		fclose(h);
 
@@ -1498,7 +1498,7 @@ bool TSNE::load_data(const char *data_path, double** data, double** Y, int* n, i
 		return false;
 	}
 
-	size_t result; // need this to get rid of warning that otherwise appear
+	size_t result; // need this to get rid of warnings that otherwise appear
 
 	result = fread(n, sizeof(int), 1, h);     		// number of datapoints
 	result = fread(d, sizeof(int), 1, h);	  		// original dimensionality
