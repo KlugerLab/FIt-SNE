@@ -875,9 +875,9 @@ double TSNE::distances2similarities(double *D, double *P, int N, int n, double p
 	/* D          - a pointer to the array of distances
 	   P          - a pointer to the array of similarities
 	   N          - length of D and P
-           n          - index of the point that should have D = 0
+	   n          - index of the point that should have D = 0
 	   perplexity - target perplexity
-           sigma      - kernel width if perplexity == -1 
+	   sigma      - kernel width if perplexity == -1 
 	   ifSquared  - if D contains squared distances (TRUE) or not (FALSE) */	
 
 	double sum_P;
