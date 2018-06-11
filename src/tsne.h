@@ -68,6 +68,7 @@ private:
     double evaluateError(double* P, double* Y, int N, int D);
     double evaluateError(unsigned int* row_P, unsigned int* col_P, double* val_P, double* Y, int N, int D, double theta);
     void zeroMean(double* X, int N, int D);
+    double distances2similarities(double *D, double *P, int N, int n, double perplexity, double sigma, bool ifSquared);
     void computeGaussianPerplexity(double* X, int N, int D, double* P, double perplexity, double sigma);
     void computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row_P, unsigned int** _col_P, double** _val_P, double perplexity, int K, double sigma, unsigned int nthreads);
     int computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row_P, unsigned int** _col_P, double** _val_P, double perplexity, int K, double sigma, int num_trees, int search_k, unsigned int nthreads);

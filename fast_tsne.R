@@ -56,7 +56,7 @@ fftRtsne <- function(X,
 	D = ncol(X);
 	writeBin(as.integer(n), f,size= 4)
 	writeBin( as.integer(D),f,size= 4)
-	writeBin( as.numeric(0.5), f,size= 8) #theta
+	writeBin( as.numeric(theta), f,size= 8) #theta
 	writeBin( as.numeric(perplexity), f,size= 8) #theta
 	writeBin( as.integer(dims), f,size=4) #theta
 	writeBin( as.integer(max_iter),f,size=4)
