@@ -868,7 +868,88 @@ double TSNE::evaluateError(unsigned int* row_P, unsigned int* col_P, double* val
 }
 
 
-// Compute input similarities with a fixed perplexity
+// Converts an array of [squared] Euclidean distances into similarities aka affinities
+// using a specified perplexity value (or a specified kernel width)
+double TSNE::distances2similarities(double *D, double *P, int N, int n, double perplexity, double sigma, bool ifSquared)  {
+
+	/* D          - a pointer to the array of distances
+	   P          - a pointer to the array of similarities
+	   N          - length of D and P
+	   n          - index of the point that should have D = 0
+	   perplexity - target perplexity
+	   sigma      - kernel width if perplexity == -1 
+	   ifSquared  - if D contains squared distances (TRUE) or not (FALSE) */	
+
+	double sum_P;
+	double beta;
+
+	if (perplexity > 0) {
+		// Using binary search to find the appropriate kernel width
+		double min_beta = -DBL_MAX;
+		double max_beta =  DBL_MAX;
+		double tol = 1e-5;
+		int max_iter = 200;	
+		int iter = 0;
+		bool found = false;
+		beta = 1.0;
+	
+		// Iterate until we found a good kernel width
+		while(!found && iter < max_iter) {
+			// Apply Gaussian kernel
+			for(int m = 0; m < N; m++) P[m] = exp(-beta * (ifSquared ? D[m] : D[m]*D[m]));
+			if (n>=0) P[n] = DBL_MIN;
+
+			// Compute entropy
+			sum_P = DBL_MIN;
+			for(int m = 0; m < N; m++) sum_P += P[m];
+			double H = 0.0;
+			for(int m = 0; m < N; m++) H += beta * ((ifSquared ? D[m] : D[m]*D[m]) * P[m]);
+			H = (H / sum_P) + log(sum_P);
+
+			// Evaluate whether the entropy is within the tolerance level
+			double Hdiff = H - log(perplexity);
+			if(Hdiff < tol && -Hdiff < tol) {
+				found = true;
+			}
+			else {
+				if(Hdiff > 0) {
+					min_beta = beta;
+					if(max_beta == DBL_MAX || max_beta == -DBL_MAX)
+						beta *= 2.0;
+					else
+						beta = (beta + max_beta) / 2.0;
+				}
+				else {
+					max_beta = beta;
+					if(min_beta == -DBL_MAX || min_beta == DBL_MAX)
+						beta /= 2.0;
+					else
+						beta = (beta + min_beta) / 2.0;
+				}
+			}
+
+			// Update iteration counter
+			iter++;
+		}
+	}else{
+		// Using fixed kernel width: no iterations needed
+		beta = 1/sigma;
+		for(int m = 0; m < N; m++) P[m] = exp(-beta * (ifSquared ? D[m] : D[m]*D[m]));
+		if (n>=0) P[n] = DBL_MIN;
+
+		sum_P = DBL_MIN;
+		for(int m = 0; m < N; m++) sum_P += P[m];
+	}
+
+	// Normalize
+	for(int m = 0; m < N; m++) P[m] /= sum_P;
+
+	return beta;
+}
+
+
+
+// Compute input similarities using exact algorithm
 void TSNE::computeGaussianPerplexity(double* X, int N, int D, double* P, double perplexity, double sigma) {
 	if (perplexity < 0 ) {
 		printf("Using manually set kernel width\n");
@@ -881,78 +962,11 @@ void TSNE::computeGaussianPerplexity(double* X, int N, int D, double* P, double 
 	if(DD == NULL) { printf("Memory allocation failed!\n"); exit(1); }
 	computeSquaredEuclideanDistance(X, N, D, DD);
 
-	// Compute the Gaussian kernel row by row
+	// Convert distances to similarities using Gaussian kernel row by row
 	int nN = 0;
+	double beta;
 	for(int n = 0; n < N; n++) {
-
-		// Initialize some variables
-		bool found = false;
-		double beta = 1.0;
-		double min_beta = -DBL_MAX;
-		double max_beta =  DBL_MAX;
-		double tol = 1e-5;
-		double sum_P;
-
-		// Iterate until we found a good perplexity
-		int iter = 0;
-		if (perplexity > 0) {
-			while(!found && iter < 200) {
-
-				// Compute Gaussian kernel row
-				for(int m = 0; m < N; m++) P[nN + m] = exp(-beta * DD[nN + m]);
-				P[nN + n] = DBL_MIN;
-
-				// Compute entropy of current row
-				sum_P = DBL_MIN;
-				for(int m = 0; m < N; m++) sum_P += P[nN + m];
-				double H = 0.0;
-				for(int m = 0; m < N; m++) H += beta * (DD[nN + m] * P[nN + m]);
-				H = (H / sum_P) + log(sum_P);
-
-				// Evaluate whether the entropy is within the tolerance level
-				double Hdiff = H - log(perplexity);
-				if(Hdiff < tol && -Hdiff < tol) {
-					found = true;
-				}
-				else {
-					if(Hdiff > 0) {
-						min_beta = beta;
-						if(max_beta == DBL_MAX || max_beta == -DBL_MAX)
-							beta *= 2.0;
-						else
-							beta = (beta + max_beta) / 2.0;
-					}
-					else {
-						max_beta = beta;
-						if(min_beta == -DBL_MAX || min_beta == DBL_MAX)
-							beta /= 2.0;
-						else
-							beta = (beta + min_beta) / 2.0;
-					}
-				}
-
-				// Update iteration counter
-				iter++;
-				//printf("Beta is %lf\n", beta);
-			}
-		}else{
-			beta = 1/sigma;
-			//printf("Beta is static and %lf\n", beta);
-			for(int m = 0; m < N; m++) P[nN + m] = exp(-beta * DD[nN + m]);
-			for(int m = 0; m < N; m++) {
-				if (n < 20 & m <40 ) {
-					//printf("%d, %d: beta %lf, DD %lf, P: %lf\n ", n, m, beta, DD[nN + m], P[nN + m]);
-				}
-			}
-			P[nN + n] = DBL_MIN;
-
-			// Compute entropy of current row
-			sum_P = DBL_MIN;
-			for(int m = 0; m < N; m++) sum_P += P[nN + m];
-		}
-
-		// Row normalize P
-		for(int m = 0; m < N; m++) P[nN + m] /= sum_P;
+		beta = distances2similarities(&DD[nN], &P[nN], N, n, perplexity, sigma, true);
 		nN += N;
 	}
 
@@ -960,7 +974,7 @@ void TSNE::computeGaussianPerplexity(double* X, int N, int D, double* P, double 
 	free(DD); DD = NULL;
 }
 
-//Use annoy
+// Compute input similarities using ANNOY
 int TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row_P, unsigned int** _col_P, 
 		double** _val_P, double perplexity, int K, double sigma, int num_trees, int search_k, unsigned int nthreads) {
 
@@ -1080,78 +1094,24 @@ int TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row
 							std::vector<double> closest_distances;
 							tree.get_nns_by_item(n, K+1, search_k, &closest, &closest_distances);
 
-							// Initialize some variables for binary search
-							bool found = false;
-							double beta = 1.0;
-							double min_beta = -DBL_MAX;
-							double max_beta =  DBL_MAX;
-							double tol = 1e-5;
 							double* cur_P = (double*) malloc((N - 1) * sizeof(double));
 							if(cur_P == NULL) { printf("Memory allocation failed!\n"); exit(1); }
 
-							// Iterate until we found a good perplexity
-							int iter = 0; double sum_P;
-							if (perplexity > 0) {
-								while(!found && iter < 200) {
-
-									// Compute Gaussian kernel row
-									for(int m = 0; m < K; m++) cur_P[m] = exp(-beta * closest_distances[m + 1] * closest_distances[m + 1]);
-									//for(int m = 0; m < K; m++) cur_P[m] = exp(-beta * distances[m + 1] * distances[m + 1]);
-
-									// Compute entropy of current row
-									sum_P = DBL_MIN;
-									for(int m = 0; m < K; m++) sum_P += cur_P[m];
-									double H = .0;
-									for(int m = 0; m < K; m++) H += beta * (closest_distances[m + 1] * closest_distances[m + 1] * cur_P[m]);
-									//for(int m = 0; m < K; m++) H += beta * (distances[m + 1] * distances[m + 1] * cur_P[m]);
-									H = (H / sum_P) + log(sum_P);
-
-									// Evaluate whether the entropy is within the tolerance level
-									double Hdiff = H - log(perplexity);
-									if(Hdiff < tol && -Hdiff < tol) {
-										found = true;
-										if(n % 10000 == 0) printf(" - point %d of %d, most recent beta calculated is %lf \n", n, N, beta);
-
-									}
-									else {
-										if(Hdiff > 0) {
-											min_beta = beta;
-											if(max_beta == DBL_MAX || max_beta == -DBL_MAX)
-												beta *= 2.0;
-											else
-												beta = (beta + max_beta) / 2.0;
-										}
-										else {
-											max_beta = beta;
-											if(min_beta == -DBL_MAX || min_beta == DBL_MAX)
-												beta /= 2.0;
-											else
-												beta = (beta + min_beta) / 2.0;
-										}
-									}
-
-									// Update iteration counter
-									iter++;
+							double beta = distances2similarities(&closest_distances[1], cur_P, K, -1, perplexity, sigma, false);
+							if(n % 10000 == 0) {
+								if (perplexity > 0) {
+									printf(" - point %d of %d, most recent beta calculated is %lf \n", n, N, beta);
+								} else {
+									printf(" - point %d of %d, beta is set to %lf \n", n, N, 1/sigma);
 								}
-							}else{
-								if(n % 10000 == 0) printf(" - point %d of %d, beta is set to %lf \n", n, N, 1/sigma);
-								beta = 1/sigma;
-								//printf("Beta is %lf\n", beta);
-								for(int m = 0; m < K; m++) cur_P[m] = exp(-beta * closest_distances[m + 1] * closest_distances[m + 1]);
-
-								// Compute entropy of current row
-								sum_P = DBL_MIN;
-								for(int m = 0; m < K; m++) sum_P += cur_P[m];
 							}
 
-							// Row-normalize current row of P and store in matrix
-							for(unsigned int m = 0; m < K; m++) cur_P[m] /= sum_P;
+							// Store current row of P in matrix
 							for(unsigned int m = 0; m < K; m++) {
-								//				col_P[row_P[n] + m] = (unsigned int) indices[m + 1].index();
 								col_P[row_P[n] + m] = (unsigned int) closest[m + 1];
 								val_P[row_P[n] + m] = cur_P[m];
 							}
-							//	printf("Using this perplexity, learned a sqrt(beta) of %lf, sqrt(1/beta) = %lf \n", sqrt(beta), sqrt(1/beta));
+
 							free(cur_P);
 							closest.clear();
 							closest_distances.clear();
@@ -1242,79 +1202,27 @@ void TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _ro
 						std::vector<double> cur_P(K);
 						//if(cur_P == NULL) { printf("Memory allocation failed!\n"); exit(1); }
 
-						if(n % 10000 == 0) printf(" - Thread %d: %d/%d \n",t, n-bi, ei-bi );
-						//if(n % 100 == 0) printf(" - point %d of %d\n", n, N);
+						// if(n % 10000 == 0) printf(" - Thread %d: %d/%d \n",t, n-bi, ei-bi );
+						// if(n % 100 == 0) printf(" - point %d of %d\n", n, N);
 
 						vector<DataPoint> indices;
 						vector<double> distances;
 						// Find nearest neighbors
 						tree->search(obj_X[n], K + 1, &indices, &distances);
 
-						// Initialize some variables for binary search
-						bool found = false;
-						double beta = 1.0;
-						double min_beta = -DBL_MAX;
-						double max_beta =  DBL_MAX;
-						double tol = 1e-5;
-
-						int iter = 0; double sum_P;
-						if (perplexity > 0) {
-							// Iterate until we found a good perplexity
-							while(!found && iter < 200) {
-
-								// Compute Gaussian kernel row
-								for(int m = 0; m < K; m++) cur_P[m] = exp(-beta * distances[m + 1] * distances[m + 1]);
-
-								// Compute entropy of current row
-								sum_P = DBL_MIN;
-								for(int m = 0; m < K; m++) sum_P += cur_P[m];
-								double H = .0;
-								for(int m = 0; m < K; m++) H += beta * (distances[m + 1] * distances[m + 1] * cur_P[m]);
-								H = (H / sum_P) + log(sum_P);
-
-								// Evaluate whether the entropy is within the tolerance level
-								double Hdiff = H - log(perplexity);
-								if(Hdiff < tol && -Hdiff < tol) {
-									found = true;
-								}
-								else {
-									if(Hdiff > 0) {
-										min_beta = beta;
-										if(max_beta == DBL_MAX || max_beta == -DBL_MAX)
-											beta *= 2.0;
-										else
-											beta = (beta + max_beta) / 2.0;
-									}
-									else {
-										max_beta = beta;
-										if(min_beta == -DBL_MAX || min_beta == DBL_MAX)
-											beta /= 2.0;
-										else
-											beta = (beta + min_beta) / 2.0;
-									}
-								}
-
-								// Update iteration counter
-								iter++;
+						double beta = distances2similarities(&distances[1], &cur_P[0], K, -1, perplexity, sigma, false);
+						if(n % 10000 == 0) {
+							if (perplexity > 0) {
+								printf(" - point %d of %d, most recent beta calculated is %lf \n", n, N, beta);
+							} else {
+								printf(" - point %d of %d, beta is set to %lf \n", n, N, 1/sigma);
 							}
-						} else {
-							beta = 1/sigma;
-							//printf("Beta is %lf\n", beta);
-							for(int m = 0; m < K; m++) cur_P[m] = exp(-beta * distances[m + 1] * distances[m + 1]);
-							// Compute entropy of current row
-							sum_P = DBL_MIN;
-							for(int m = 0; m < K; m++) sum_P += cur_P[m];
 						}
 
-						//printf("\n point: %d", n);
-						// Row-normalize current row of P and store in matrix
-						for(unsigned int m = 0; m < K; m++) cur_P[m] /= sum_P;
 						for(unsigned int m = 0; m < K; m++) {
 							col_P[row_P[n] + m] = (unsigned int) indices[m + 1].index();
 							val_P[row_P[n] + m] = cur_P[m];
-							//printf(", %.12f(%d)", cur_P[m], m);
 						}
-
 
 						indices.clear();
 						distances.clear();
