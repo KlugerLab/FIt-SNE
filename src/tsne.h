@@ -63,12 +63,12 @@ private:
                          int N, int D, double *dC, double theta);
 
     void computeFftGradient(double *P, unsigned int *inp_row_P, unsigned int *inp_col_P, double *inp_val_P, double *Y,
-                            int N, int D, double *dC, double theta, int n_interpolation_points, double intervals_per_integer,
-                            int min_num_intervals);
+                                int N, int D, double *dC, int n_interpolation_points, double intervals_per_integer,
+                                int min_num_intervals);
 
     void computeFftGradientOneD(double *P, unsigned int *inp_row_P, unsigned int *inp_col_P, double *inp_val_P,
-                                double *Y, int N, int D, double *dC, double theta, int n_interpolation_points,
-                                double intervals_per_integer, int min_num_intervals);
+                                    double *Y, int N, int D, double *dC, int n_interpolation_points,
+                                    double intervals_per_integer, int min_num_intervals);
 
     void computeExactGradient(double *P, double *Y, int N, int D, double *dC);
 

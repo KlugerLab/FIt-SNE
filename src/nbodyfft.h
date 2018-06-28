@@ -1,7 +1,11 @@
 #ifndef NBODYFFT_H
 #define NBODYFFT_H
 
+#ifdef _WIN32
+#include "winlibs/fftw3.h"
+#else
 #include <fftw3.h>
+#endif
 #include <complex>
 
 using namespace std;

@@ -123,7 +123,7 @@ void n_body_fft_2d(int N, int n_terms, double *xs, double *ys, double *chargesQi
     auto *y_interpolated_values = new double[N * n_interpolation_points];
     interpolate(n_interpolation_points, N, y_in_box, y_tilde_spacings, y_interpolated_values);
 
-    auto *w_coeffs = new double[total_interpolation_points * n_terms]();
+    auto *w_coefficients = new double[total_interpolation_points * n_terms]();
     for (int i = 0; i < N; i++) {
         int box_idx = point_box_idx[i];
         int box_j = box_idx / n_boxes;
@@ -134,7 +134,7 @@ void n_body_fft_2d(int N, int n_terms, double *xs, double *ys, double *chargesQi
                 int idx = (box_i * n_interpolation_points + interp_i) * (n_boxes * n_interpolation_points) +
                           (box_j * n_interpolation_points) + interp_j;
                 for (int d = 0; d < n_terms; d++) {
-                    w_coeffs[idx * n_terms + d] +=
+                    w_coefficients[idx * n_terms + d] +=
                             y_interpolated_values[interp_j * N + i] *
                             x_interpolated_values[interp_i * N + i] *
                             chargesQij[i * n_terms + d];
@@ -153,18 +153,18 @@ void n_body_fft_2d(int N, int n_terms, double *xs, double *ys, double *chargesQi
 
     // FFT of fft_input
     auto *fft_input = new double[n_fft_coeffs * n_fft_coeffs]();
-    auto *fft_w_coeffs = new complex<double>[n_fft_coeffs * (n_fft_coeffs / 2 + 1)];
+    auto *fft_w_coefficients = new complex<double>[n_fft_coeffs * (n_fft_coeffs / 2 + 1)];
     auto *fft_output = new double[n_fft_coeffs * n_fft_coeffs]();
 
     fftw_plan plan_dft, plan_idft;
     plan_dft = fftw_plan_dft_r2c_2d(n_fft_coeffs, n_fft_coeffs, fft_input,
-                                    reinterpret_cast<fftw_complex *>(fft_w_coeffs), FFTW_ESTIMATE);
-    plan_idft = fftw_plan_dft_c2r_2d(n_fft_coeffs, n_fft_coeffs, reinterpret_cast<fftw_complex *>(fft_w_coeffs),
+                                    reinterpret_cast<fftw_complex *>(fft_w_coefficients), FFTW_ESTIMATE);
+    plan_idft = fftw_plan_dft_c2r_2d(n_fft_coeffs, n_fft_coeffs, reinterpret_cast<fftw_complex *>(fft_w_coefficients),
                                      fft_output, FFTW_ESTIMATE);
 
     for (int d = 0; d < n_terms; d++) {
         for (int i = 0; i < total_interpolation_points; i++) {
-            mpol_sort[i] = w_coeffs[i * n_terms + d];
+            mpol_sort[i] = w_coefficients[i * n_terms + d];
         }
 
         for (int i = 0; i < n_fft_coeffs_half; i++) {
@@ -177,12 +177,12 @@ void n_body_fft_2d(int N, int n_terms, double *xs, double *ys, double *chargesQi
 
         // Take the Hadamard product of two complex vectors
         for (int i = 0; i < n_fft_coeffs * (n_fft_coeffs / 2 + 1); i++) {
-            double x_ = fft_w_coeffs[i].real();
-            double y_ = fft_w_coeffs[i].imag();
+            double x_ = fft_w_coefficients[i].real();
+            double y_ = fft_w_coefficients[i].imag();
             double u_ = fft_kernel_tilde[i].real();
             double v_ = fft_kernel_tilde[i].imag();
-            fft_w_coeffs[i].real(x_ * u_ - y_ * v_);
-            fft_w_coeffs[i].imag(x_ * v_ + y_ * u_);
+            fft_w_coefficients[i].real(x_ * u_ - y_ * v_);
+            fft_w_coefficients[i].imag(x_ * v_ + y_ * u_);
         }
 
         // Invert the computed values at the interpolated nodes
@@ -205,7 +205,7 @@ void n_body_fft_2d(int N, int n_terms, double *xs, double *ys, double *chargesQi
 
     fftw_destroy_plan(plan_dft);
     fftw_destroy_plan(plan_idft);
-    delete[] fft_w_coeffs;
+    delete[] fft_w_coefficients;
     delete[] fft_input;
     delete[] fft_output;
     delete[] mpol_sort;
@@ -234,7 +234,7 @@ void n_body_fft_2d(int N, int n_terms, double *xs, double *ys, double *chargesQi
     delete[] point_box_idx;
     delete[] x_interpolated_values;
     delete[] y_interpolated_values;
-    delete[] w_coeffs;
+    delete[] w_coefficients;
     delete[] y_tilde_values;
     delete[] x_in_box;
     delete[] y_in_box;
@@ -248,7 +248,7 @@ void precompute(double y_min, double y_max, int n_boxes, int n_interpolation_poi
      * Set up the boxes
      */
     double box_width = (y_max - y_min) / (double) n_boxes;
-    // Left and right bounds of each box
+    // Compute the left and right bounds of each box
     for (int box_idx = 0; box_idx < n_boxes; box_idx++) {
         box_lower_bounds[box_idx] = box_idx * box_width + y_min;
         box_upper_bounds[box_idx] = (box_idx + 1) * box_width + y_min;
@@ -363,52 +363,53 @@ void nbodyfft(int N, int n_terms, double *Y, double *chargesQij, int n_boxes, in
     auto *interpolated_values = new double[n_interpolation_points * N];
     interpolate(n_interpolation_points, N, y_in_box, y_tilde_spacings, interpolated_values);
 
-    auto *w_coeffs = new double[total_interpolation_points * n_terms]();
+    auto *w_coefficients = new double[total_interpolation_points * n_terms]();
     for (int i = 0; i < N; i++) {
         int box_idx = point_box_idx[i] * n_interpolation_points;
         for (int interp_idx = 0; interp_idx < n_interpolation_points; interp_idx++) {
             for (int d = 0; d < n_terms; d++) {
-                w_coeffs[(box_idx + interp_idx) * n_terms + d] +=
+                w_coefficients[(box_idx + interp_idx) * n_terms + d] +=
                         interpolated_values[interp_idx * N + i] * chargesQij[i * n_terms + d];
             }
         }
     }
 
-    // `embedded_w_coeffs` is just a vector of zeros prepended to `w_coeffs`, this (probably) matches the dimensions of
-    // the kernel matrix K and since we embedded the generating vector by prepending values, we have to do the same here
-    auto *embedded_w_coeffs = new double[2 * total_interpolation_points * n_terms]();
+    // `embedded_w_coefficients` is just a vector of zeros prepended to `w_coefficients`, this (probably) matches the
+    // dimensions of the kernel matrix K and since we embedded the generating vector by prepending values, we have to do
+    // the same here
+    auto *embedded_w_coefficients = new double[2 * total_interpolation_points * n_terms]();
     for (int i = 0; i < total_interpolation_points; i++) {
         for (int d = 0; d < n_terms; d++) {
-            embedded_w_coeffs[(total_interpolation_points + i) * n_terms + d] = w_coeffs[i * n_terms + d];
+            embedded_w_coefficients[(total_interpolation_points + i) * n_terms + d] = w_coefficients[i * n_terms + d];
         }
     }
 
     /*
      * Step 2: Compute the values v_{m, n} at the equispaced nodes, multiply the kernel matrix with the coefficients w
      */
-    auto *fft_w_coeffs = new complex<double>[2 * total_interpolation_points];
+    auto *fft_w_coefficients = new complex<double>[2 * total_interpolation_points];
     auto *y_tilde_values = new double[total_interpolation_points * n_terms]();
 
     fftw_plan plan_dft, plan_idft;
-    plan_dft = fftw_plan_dft_1d(2 * total_interpolation_points, reinterpret_cast<fftw_complex *>(fft_w_coeffs),
-                                reinterpret_cast<fftw_complex *>(fft_w_coeffs), FFTW_FORWARD, FFTW_ESTIMATE);
-    plan_idft = fftw_plan_dft_1d(2 * total_interpolation_points, reinterpret_cast<fftw_complex *>(fft_w_coeffs),
-                                 reinterpret_cast<fftw_complex *>(fft_w_coeffs), FFTW_BACKWARD, FFTW_ESTIMATE);
+    plan_dft = fftw_plan_dft_1d(2 * total_interpolation_points, reinterpret_cast<fftw_complex *>(fft_w_coefficients),
+                                reinterpret_cast<fftw_complex *>(fft_w_coefficients), FFTW_FORWARD, FFTW_ESTIMATE);
+    plan_idft = fftw_plan_dft_1d(2 * total_interpolation_points, reinterpret_cast<fftw_complex *>(fft_w_coefficients),
+                                 reinterpret_cast<fftw_complex *>(fft_w_coefficients), FFTW_BACKWARD, FFTW_ESTIMATE);
 
     for (int d = 0; d < n_terms; d++) {
         for (int i = 0; i < 2 * total_interpolation_points; i++) {
-            fft_w_coeffs[i].real(embedded_w_coeffs[i * n_terms + d]);
+            fft_w_coefficients[i].real(embedded_w_coefficients[i * n_terms + d]);
         }
         fftw_execute(plan_dft);
 
         // Take the Hadamard product of two complex vectors
         for (int i = 0; i < 2 * total_interpolation_points; i++) {
-            double x_ = fft_w_coeffs[i].real();
-            double y_ = fft_w_coeffs[i].imag();
+            double x_ = fft_w_coefficients[i].real();
+            double y_ = fft_w_coefficients[i].imag();
             double u_ = fft_kernel_vector[i].real();
             double v_ = fft_kernel_vector[i].imag();
-            fft_w_coeffs[i].real(x_ * u_ - y_ * v_);
-            fft_w_coeffs[i].imag(x_ * v_ + y_ * u_);
+            fft_w_coefficients[i].real(x_ * u_ - y_ * v_);
+            fft_w_coefficients[i].imag(x_ * v_ + y_ * u_);
         }
 
         // Invert the computed values at the interpolated nodes, unfortunate naming but it's better to do IDFT inplace
@@ -417,13 +418,13 @@ void nbodyfft(int N, int n_terms, double *Y, double *chargesQij, int n_boxes, in
         for (int i = 0; i < total_interpolation_points; i++) {
             // FFTW doesn't perform IDFT normalization, so we have to do it ourselves. This is done by multiplying the
             // result with the number of points in the input
-            y_tilde_values[i * n_terms + d] = fft_w_coeffs[i].real() / (total_interpolation_points * 2.0);
+            y_tilde_values[i * n_terms + d] = fft_w_coefficients[i].real() / (total_interpolation_points * 2.0);
         }
     }
 
     fftw_destroy_plan(plan_dft);
     fftw_destroy_plan(plan_idft);
-    delete[] fft_w_coeffs;
+    delete[] fft_w_coefficients;
 
     /*
      * Step 3: Compute the potentials \tilde{\phi}
@@ -441,7 +442,7 @@ void nbodyfft(int N, int n_terms, double *Y, double *chargesQij, int n_boxes, in
     delete[] point_box_idx;
     delete[] y_in_box;
     delete[] interpolated_values;
-    delete[] w_coeffs;
+    delete[] w_coefficients;
     delete[] y_tilde_values;
-    delete[] embedded_w_coeffs;
+    delete[] embedded_w_coefficients;
 }

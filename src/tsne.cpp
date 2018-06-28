@@ -33,25 +33,14 @@
 #include "winlibs/stdafx.h"
 
 #include <iostream>
-#include <time.h>
 #include <fstream>
 #include "nbodyfft.h"
-
-#ifdef _WIN32
-#include "winlibs/fftw3.h"
-#else
-#include <fftw3.h>
-#endif
-
 #include <math.h>
 #include "annoylib.h"
 #include "kissrandom.h"
 #include <thread>
 #include <float.h>
-#include <stdlib.h>
-#include <stdio.h>
 #include <cstring>
-#include <time.h>
 #include "vptree.h"
 #include "sptree.h"
 #include "tsne.h"
@@ -61,23 +50,22 @@
 #else
 #include <unistd.h>
 #endif
-
-#include <sstream>
 #include <functional>
 
 #define _CRT_SECURE_NO_WARNINGS
+
 
 int itTest = 0;
 bool measure_accuracy = false;
 
 
-double cauchy(double x, double y, double bandx, double bandy) {
-    return pow(1.0 / (double) (1.0 + pow(x - y, 2)), 2);
+double squared_cauchy(double x, double y) {
+    return pow(1.0 + pow(x - y, 2), -2);
 }
 
 
-double cauchy2d(double x1, double x2, double y1, double y2, double bandx, double bandy) {
-    return pow(1.0 / (double) (1.0 + pow(x1 - y1, 2) + pow(x2 - y2, 2)), 2);
+double squared_cauchy_2d(double x1, double x2, double y1, double y2) {
+    return pow(1.0 + pow(x1 - y1, 2) + pow(x2 - y2, 2), -2);
 }
 
 
@@ -104,11 +92,9 @@ void print_progress(int iter, double *Y, int N, int no_dims) {
 // Perform t-SNE
 int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity, double theta, int rand_seed,
               bool skip_random_init, int max_iter, int stop_lying_iter, int mom_switch_iter, int K, double sigma,
-              int nbody_algo, int knn_algo, double early_exag_coeff, double *initialError, double *costs,
+              int nbody_algorithm, int knn_algo, double early_exag_coeff, double *initialError, double *costs,
               bool no_momentum_during_exag, int start_late_exag_iter, double late_exag_coeff, int n_trees, int search_k,
-              int nterms, double intervals_per_integer, int min_num_intervals, unsigned int nthreads,
-              int load_affinities) {
-
+              int nterms, double intervals_per_integer, int min_num_intervals, unsigned int nthreads, int load_affinities) {
     // Set random seed
     if (skip_random_init != true) {
         if (rand_seed >= 0) {
@@ -131,34 +117,34 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
     } else {
         printf("Will use momentum during exaggeration phase\n");
     }
-    printf("Using no_dims = %d, max_iter = %d, perplexity = %f, theta = %f, K = %d, Sigma = %lf, knn_algo = %d, early_exag_coeff = %f, data[0] = %lf\n",
-           no_dims, max_iter, perplexity, theta, K, sigma, knn_algo, early_exag_coeff, X[0]);
+    printf("Using no_dims = %d, max_iter = %d, perplexity = %f, theta = %f, K = %d, Sigma = %lf, knn_algo = %d, "
+           "early_exag_coeff = %f, data[0] = %lf\n", no_dims, max_iter, perplexity, theta, K, sigma, knn_algo,
+           early_exag_coeff, X[0]);
 
-    bool exact = (theta == .0) ? true : false;
+    // Determine whether we are using an exact algorithm
+    bool exact = theta == .0;
 
     // Set learning parameters
     float total_time = .0;
     clock_t start, end;
     double momentum = .5, final_momentum = .8;
 
-    //step size
-    double eta = 200;
+    // Step size
+    double learning_rate = 200;
 
     // Allocate some memory
-    double *dY = (double *) malloc(N * no_dims * sizeof(double));
-    double *uY = (double *) malloc(N * no_dims * sizeof(double));
-    double *gains = (double *) malloc(N * no_dims * sizeof(double));
-    if (dY == NULL || uY == NULL || gains == NULL) {
-        printf("Memory allocation failed!\n");
-        exit(1);
-    }
+    auto *dY = (double *) malloc(N * no_dims * sizeof(double));
+    auto *uY = (double *) malloc(N * no_dims * sizeof(double));
+    auto *gains = (double *) malloc(N * no_dims * sizeof(double));
+    if (dY == nullptr || uY == nullptr || gains == nullptr) throw std::bad_alloc();
+
+    // Initialize gradient to zeros and gains to ones.
     for (int i = 0; i < N * no_dims; i++) uY[i] = .0;
     for (int i = 0; i < N * no_dims; i++) gains[i] = 1.0;
 
     printf("Computing input similarities...\n");
-    //struct timespec start_timespec, finish_timespec;
-    //clock_gettime(CLOCK_MONOTONIC, &start_timespec);
     zeroMean(X, N, D);
+
     if (perplexity > 0) {
         printf("Using perplexity, so normalizing input data (to prevent numerical problems)\n");
         double max_X = .0;
@@ -372,24 +358,22 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
 		printf("Using the given initialization.\n");
     }
 
-    // If we are doing early exaggeration, we premultiply all the P by the coefficient of early exaggeration
+    // If we are doing early exaggeration, we pre-multiply all the P by the coefficient of early exaggeration
     double max_sum_cols = 0;
-    //Compute maximum possible exaggeration coefficient, if user requests
+    // Compute maximum possible exaggeration coefficient, if user requests
     if (early_exag_coeff == 0) {
         for (int n = 0; n < N; n++) {
             double running_sum = 0;
             for (int i = row_P[n]; i < row_P[n + 1]; i++) {
                 running_sum += val_P[i];
-                //printf("val_P[i] = %lf\n", val_P[i]);
             }
             if (running_sum > max_sum_cols) max_sum_cols = running_sum;
         }
-        early_exag_coeff = (1.0 / (eta * max_sum_cols));
-        //early_exag_coeff = (1.0/(max_sum_cols) );
+        early_exag_coeff = (1.0 / (learning_rate * max_sum_cols));
         printf("Max of the val_Ps is: %lf\n", max_sum_cols);
     }
 
-    printf("Exagerating Ps by %f\n", early_exag_coeff);
+    printf("Exaggerating Ps by %f\n", early_exag_coeff);
     if (exact) {
         for (int i = 0; i < N * N; i++) {
             P[i] *= early_exag_coeff;
@@ -402,23 +386,21 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
     print_progress(0, Y, N, no_dims);
 
     // Perform main training loop
-
-    //clock_gettime(CLOCK_MONOTONIC, &finish_timespec);
-    //double elapsed_input = (finish_timespec.tv_sec - start_timespec.tv_sec);
-    //printf("Input similarities learned in %lf seconds\n", elapsed_input);
-
-	if(exact) printf("Input similarities computed.\nLearning embedding...\n");
-    else printf("Input similarities computed (sparsity = %f).\nLearning embedding...\n",
-    		(double) row_P[N] / ((double) N * (double) N));
+    if (exact) {
+        printf("Input similarities computed \nLearning embedding...\n");
+    } else {
+        printf("Input similarities computed (sparsity = %f)!\nLearning embedding...\n",
+               (double) row_P[N] / ((double) N * (double) N));
+    }
 
     start = clock();
     if (!exact) {
-        if (nbody_algo == 2) {
+        if (nbody_algorithm == 2) {
             printf("Using FIt-SNE approximation.\n");
-        } else if (nbody_algo == 1) {
+        } else if (nbody_algorithm == 1) {
             printf("Using the Barnes-Hut approximation.\n");
         } else {
-            printf("Error: undefined algo.");
+            printf("Error: Undefined algorithm");
             exit(2);
         }
     }
@@ -427,58 +409,56 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
         itTest = iter;
 
         if (exact) {
+            // Compute the exact gradient using full P matrix
             computeExactGradient(P, Y, N, no_dims, dY);
         } else {
-            if (nbody_algo == 2) {
+            if (nbody_algorithm == 2) {
+                // Use FFT accelerated interpolation based negative gradients
                 if (no_dims == 1) {
-                    computeFftGradientOneD(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta, nterms,
-                                           intervals_per_integer, min_num_intervals);
+                    computeFftGradientOneD(P, row_P, col_P, val_P, Y, N, no_dims, dY, nterms, intervals_per_integer,
+                                           min_num_intervals);
                 } else {
-                    computeFftGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta, nterms, intervals_per_integer,
+                    computeFftGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, nterms, intervals_per_integer,
                                        min_num_intervals);
                 }
-            } else if (nbody_algo == 1) {
+            } else if (nbody_algorithm == 1) {
+                // Otherwise, compute the negative gradient using the Barnes-Hut approximation
                 computeGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta);
             }
         }
 
         if (measure_accuracy) {
             computeGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta);
-            computeFftGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta, nterms, intervals_per_integer,
+            computeFftGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, nterms, intervals_per_integer,
                                min_num_intervals);
             computeExactGradientTest(Y, N, no_dims);
         }
 
-        //some diagnostic output
-        //for(int i = 0; i < 10 ; i++) {
-        //printf("%d,truth: %le, Estimate: %le\n", i,dYExact[i], dY[i]);
-        //printf("dY[%d]: %le\n", i, dY[i]);
-        //}
-
-        //User can specify to turn off momentum/gains until after the early exaggeration phase is completed
+        // We can turn off momentum/gains until after the early exaggeration phase is completed
         if (no_momentum_during_exag) {
             if (iter > stop_lying_iter) {
                 for (int i = 0; i < N * no_dims; i++)
                     gains[i] = (sign(dY[i]) != sign(uY[i])) ? (gains[i] + .2) : (gains[i] * .8);
                 for (int i = 0; i < N * no_dims; i++) if (gains[i] < .01) gains[i] = .01;
-                for (int i = 0; i < N * no_dims; i++) uY[i] = momentum * uY[i] - eta * gains[i] * dY[i];
+                for (int i = 0; i < N * no_dims; i++) uY[i] = momentum * uY[i] - learning_rate * gains[i] * dY[i];
                 for (int i = 0; i < N * no_dims; i++) Y[i] = Y[i] + uY[i];
             } else {
-                //During early exaggeration or compression, no trickery (i.e. no momentum, or gains).  Just good old fashion gradient descent
+                // During early exaggeration or compression, no trickery (i.e. no momentum, or gains). Just good old
+                // fashion gradient descent
                 for (int i = 0; i < N * no_dims; i++) Y[i] = Y[i] - dY[i];
             }
         } else {
             for (int i = 0; i < N * no_dims; i++)
                 gains[i] = (sign(dY[i]) != sign(uY[i])) ? (gains[i] + .2) : (gains[i] * .8);
             for (int i = 0; i < N * no_dims; i++) if (gains[i] < .01) gains[i] = .01;
-            for (int i = 0; i < N * no_dims; i++) uY[i] = momentum * uY[i] - eta * gains[i] * dY[i];
+            for (int i = 0; i < N * no_dims; i++) uY[i] = momentum * uY[i] - learning_rate * gains[i] * dY[i];
             for (int i = 0; i < N * no_dims; i++) Y[i] = Y[i] + uY[i];
         }
 
         // Make solution zero-mean
         zeroMean(Y, N, no_dims);
 
-        //Switch off early exaggeration
+        // Switch off early exaggeration
         if (iter == stop_lying_iter) {
             printf("Unexaggerating Ps by %f\n", early_exag_coeff);
             if (exact) { for (int i = 0; i < N * N; i++) P[i] /= early_exag_coeff; }
@@ -496,40 +476,27 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
             clock_t end = clock();
             double C = .0;
             if (exact) C = evaluateError(P, Y, N, no_dims);
-            //else      C = evaluateError(row_P, col_P, val_P, Y, N, no_dims, theta);  // doing approximate computation here!
             costs[iter] = C;
             if (iter > 0) {
                 total_time += (float) (end - start) / CLOCKS_PER_SEC;
                 printf("Iteration %d (50 iterations in %f seconds)\n", iter, (float) (end - start) / CLOCKS_PER_SEC);
             }
-            //print_progress (iter, Y, N, no_dims);
             start = clock();
         }
     }
-    end = clock();
-    total_time += (float) (end - start) / CLOCKS_PER_SEC;
 
     // Clean up memory
     free(dY);
     free(uY);
     free(gains);
-    if (exact) free(P);
-    else {
+
+    if (exact) {
+        free(P);
+    } else {
         free(row_P);
-        row_P = NULL;
         free(col_P);
-        col_P = NULL;
         free(val_P);
-        val_P = NULL;
     }
-    /*
-    printf("N-body phase completed in %4.2f seconds.\n", total_time);
-       FILE * fp = fopen( "temp/time_results.txt", "a" ); // Open file for writing
-       if (fp != NULL) {
-       fprintf(fp,"vptree8, %d, %d, %f, %f\n", N, D, elapsed_input, total_time);
-       fclose(fp);
-       }
-       */
     return 0;
 }
 
@@ -537,7 +504,6 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
 // Compute gradient of the t-SNE cost function (using Barnes-Hut algorithm)
 void TSNE::computeGradient(double *P, unsigned int *inp_row_P, unsigned int *inp_col_P, double *inp_val_P, double *Y,
                            int N, int D, double *dC, double theta) {
-
     // Construct space-partitioning tree on current map
     SPTree *tree = new SPTree(D, Y, N);
 
@@ -550,7 +516,9 @@ void TSNE::computeGradient(double *P, unsigned int *inp_row_P, unsigned int *inp
         exit(1);
     }
     tree->computeEdgeForces(inp_row_P, inp_col_P, inp_val_P, N, pos_f);
-    for (int n = 0; n < N; n++) tree->computeNonEdgeForces(n, theta, neg_f + n * D, &sum_Q);
+    for (int n = 0; n < N; n++) {
+        tree->computeNonEdgeForces(n, theta, neg_f + n * D, &sum_Q);
+    }
 
     // Compute final t-SNE gradient
     FILE *fp = nullptr;
@@ -562,10 +530,10 @@ void TSNE::computeGradient(double *P, unsigned int *inp_row_P, unsigned int *inp
     for (int i = 0; i < N * D; i++) {
         dC[i] = pos_f[i] - (neg_f[i] / sum_Q);
         if (measure_accuracy) {
-            if (i < N)
-                //fprintf(fp,"%d,  %lf\n",i, neg_f[i*2]/sum_Q);
+            if (i < N) {
                 fprintf(fp, "%d, %.12e, %.12e, %.12e,%.12e,%.12e  %.12e\n", i, dC[i * 2], dC[i * 2 + 1], pos_f[i * 2],
                         pos_f[i * 2 + 1], neg_f[i * 2] / sum_Q, neg_f[i * 2 + 1] / sum_Q);
+            }
         }
     }
     if (measure_accuracy) {
@@ -576,299 +544,214 @@ void TSNE::computeGradient(double *P, unsigned int *inp_row_P, unsigned int *inp
     delete tree;
 }
 
+
+// Compute the gradient of the t-SNE cost function using the FFT interpolation based approximation for for one
+// dimensional Ys
 void TSNE::computeFftGradientOneD(double *P, unsigned int *inp_row_P, unsigned int *inp_col_P, double *inp_val_P,
-                                  double *Y, int N, int D, double *dC, double theta, int nterms,
+                                  double *Y, int N, int D, double *dC, int n_interpolation_points,
                                   double intervals_per_integer, int min_num_intervals) {
-    //Zero out the gradient
-    for (int i = 0; i < N * D; i++) {
-        dC[i] = 0.0;
-    }
+    // Zero out the gradient
+    for (int i = 0; i < N * D; i++) dC[i] = 0.0;
 
-    int ndim = 3; //Number of sets of charges.
-
-    double *locs = (double *) malloc(N * sizeof(double));
-    double *chargesQij = (double *) malloc(ndim * N * sizeof(double));
-    double *potentialQij = (double *) malloc(ndim * N * sizeof(double));
-
-    //Push all the points at which we will evaluate
-    //Y is stored row major, with a row corresponding to a single point
-    double rmin = 1E5;
-    double rmax = -1E5;
+    // Push all the points at which we will evaluate
+    // Y is stored row major, with a row corresponding to a single point
+    // Find the min and max values of Ys
+    double y_min = INFINITY;
+    double y_max = -INFINITY;
     for (unsigned long i = 0; i < N; i++) {
-        locs[i] = Y[i];
-        if (Y[i] < rmin) rmin = Y[i];
-        if (Y[i] > rmax) rmax = Y[i];
+        if (Y[i] < y_min) y_min = Y[i];
+        if (Y[i] > y_max) y_max = Y[i];
     }
-    int nboxes = fmax(min_num_intervals, (rmax - rmin) / (double) intervals_per_integer);
-    //printf("%d nodes, from %lf to %lf, so using nboxes=%d\n",nterms, rmin, rmax, nboxes);
 
+    auto n_boxes = static_cast<int>(fmax(min_num_intervals, (y_max - y_min) / intervals_per_integer));
+
+    // The number of "charges" or s+2 sums i.e. number of kernel sums
+    int n_terms = 3;
+
+    auto *chargesQij = new double[N * n_terms];
+    auto *potentialsQij = new double[N * n_terms]();
+
+    // Prepare the terms that we'll use to compute the sum i.e. the repulsive forces
     for (unsigned long j = 0; j < N; j++) {
-        chargesQij[j] = 1;
-        chargesQij[1 * N + j] = Y[j];
-        chargesQij[2 * N + j] = Y[j] * Y[j];
+        chargesQij[j * n_terms + 0] = 1;
+        chargesQij[j * n_terms + 1] = Y[j];
+        chargesQij[j * n_terms + 2] = Y[j] * Y[j];
     }
+
+    auto *box_lower_bounds = new double[n_boxes];
+    auto *box_upper_bounds = new double[n_boxes];
+    auto *y_tilde_spacings = new double[n_interpolation_points];
+    auto *y_tilde = new double[n_interpolation_points * n_boxes]();
+    auto *fft_kernel_vector = new complex<double>[2 * n_interpolation_points * n_boxes];
+
+    precompute(y_min, y_max, n_boxes, n_interpolation_points, &squared_cauchy, box_lower_bounds, box_upper_bounds,
+               y_tilde_spacings, y_tilde, fft_kernel_vector);
+    nbodyfft(N, n_terms, Y, chargesQij, n_boxes, n_interpolation_points, box_lower_bounds, box_upper_bounds,
+             y_tilde_spacings, y_tilde, fft_kernel_vector, potentialsQij);
+
+    delete[] box_lower_bounds;
+    delete[] box_upper_bounds;
+    delete[] y_tilde_spacings;
+    delete[] y_tilde;
+    delete[] fft_kernel_vector;
+
+    // Compute the normalization constant Z or sum of q_{ij}. This expression is different from the one in the original
+    // paper, but equivalent. This is done so we need only use a single kernel (K_2 in the paper) instead of two
+    // different ones. We subtract N at the end because the following sums over all i, j, whereas Z contains i \neq j
+    double sum_Q = 0;
     for (unsigned long i = 0; i < N; i++) {
-        //printf("loc: %f, %f, %f, %f\n", locs[i], chargesQij[i], chargesQij[1*N+i], chargesQij[2*N+i]);
+        double phi1 = potentialsQij[i * n_terms + 0];
+        double phi2 = potentialsQij[i * n_terms + 1];
+        double phi3 = potentialsQij[i * n_terms + 2];
+
+        sum_Q += (1 + Y[i] * Y[i]) * phi1 - 2 * (Y[i] * phi2) + phi3;
     }
-    clock_t begin = clock();
-    double *band = (double *) calloc(N, sizeof(double));
-    kerneltype kernel = &cauchy;
+    sum_Q -= N;
 
-    double *boxl = (double *) malloc(nboxes * sizeof(double));
-    double *boxr = (double *) malloc(nboxes * sizeof(double));
-    double *prods = (double *) malloc(nterms * sizeof(double));
-    double *xpts = (double *) malloc(nterms * sizeof(double));
-    double *xptsall = (double *) calloc(nterms * nboxes, sizeof(double));
-    fftw_complex *zkvalf = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * 2 * nterms * nboxes);
-
-    precompute(rmin, rmax, nboxes, nterms, &cauchy, band, boxl, boxr, prods, xpts, xptsall, zkvalf);
-    nbodyfft(N, ndim, locs, chargesQij, nboxes, nterms, boxl, boxr, prods, xpts, xptsall, zkvalf, potentialQij);
-    free(band);
-    free(boxl);
-    free(boxr);
-    free(prods);
-    free(xpts);
-    free(xptsall);
-    fftw_free(zkvalf);
-
-    double zSum = 0;
-    for (unsigned long i = 0; i < N; i++) {
-        double phi1 = potentialQij[i];
-        double phi2 = potentialQij[1 * N + i];
-        double phi3 = potentialQij[2 * N + i];
-        double Y_i = Y[i];
-
-        zSum += (1 + Y_i * Y_i) * phi1 - 2 * (Y_i * phi2) + phi3;
-    }
-    zSum -= N;
-    //printf("zSum from the new calc is %le\n\n", zSum2);
-
-    //Now, figure out the Gaussian component of the gradient.  This
-    //coresponds to the "attraction" term of the gradient.  It was
-    //calculated using a fast KNN approach, so here we just use the results
-    //that were passed to this function
-    clock_t startTime = clock();
+    // Now, figure out the Gaussian component of the gradient. This corresponds to the "attraction" term of the
+    // gradient. It was calculated using a fast KNN approach, so here we just use the results that were passed to this
+    // function
     unsigned int ind2 = 0;
-    double *pos_f;
-    pos_f = new double[N];
+    double *pos_f = new double[N];
     // Loop over all edges in the graph
-    double r, q_ij, Y_diff;
+    double q_ij, d_ij;
     for (unsigned int n = 0; n < N; n++) {
         pos_f[n] = 0;
         for (unsigned int i = inp_row_P[n]; i < inp_row_P[n + 1]; i++) {
             // Compute pairwise distance and Q-value
             ind2 = inp_col_P[i];
-            Y_diff = Y[n] - Y[ind2];
-            q_ij = 1 / (1 + Y_diff * Y_diff);
-            pos_f[n] += inp_val_P[i] * q_ij * Y_diff;
+            d_ij = Y[n] - Y[ind2];
+            q_ij = 1 / (1 + d_ij * d_ij);
+            pos_f[n] += inp_val_P[i] * q_ij * d_ij;
         }
     }
 
-    //cout << "->Attraction term" << ((double) clock() -startTime)/(double) CLOCKS_PER_SEC << endl;
-
-    startTime = clock();
-    //Make the negative term, or F_rep in the equation 3 of the paper
-    double *neg_f;
-    neg_f = new double[N];
+    // Make the negative term, or F_rep in the equation 3 of the paper
+    double *neg_f = new double[N];
     for (unsigned int n = 0; n < N; n++) {
-
-        double Qij_y_i, Qij_y_j, Qij_y;
-
-        Qij_y_i = Y[n] * potentialQij[n];
-        Qij_y_j = potentialQij[1 * N + n];
-
-        Qij_y = Qij_y_i - Qij_y_j;
-
-        //Note that we only use the Z normalization term in the F_rep,
-        //because it cancels in the F_attr.  Also, note that we divide
-        //it, because the denominator of q_ij^2  is Z^2, so it cancels
-        //out the Z in the numerater for Equation 3
-        neg_f[n] = Qij_y / zSum;
+        neg_f[n] = (Y[n] * potentialsQij[n * n_terms] - potentialsQij[n * n_terms + 1]) / sum_Q;
 
         dC[n] = pos_f[n] - neg_f[n];
     }
-    for (unsigned long i = 0; i < N; i++) {
-        //	printf("pos_f %f,neg_f %f\n", pos_f[i], neg_f[i]);
-    }
-    //cout << "->Negative term" << ((double) clock() -startTime)/(double) CLOCKS_PER_SEC << endl;
 
-    free(potentialQij);
-    free(locs);
+    delete[] chargesQij;
+    delete[] potentialsQij;
     delete[] pos_f;
     delete[] neg_f;
-
-    free(chargesQij);
-    chargesQij = NULL;
 }
 
 
-// Compute gradient of the t-SNE cost function (using FFT)
+// Compute the gradient of the t-SNE cost function using the FFT interpolation based approximation
 void TSNE::computeFftGradient(double *P, unsigned int *inp_row_P, unsigned int *inp_col_P, double *inp_val_P, double *Y,
-                              int N, int D, double *dC, double theta, int nterms, double intervals_per_integer,
+                              int N, int D, double *dC, int n_interpolation_points, double intervals_per_integer,
                               int min_num_intervals) {
-    //clock_t startTime;
-    //Zero out the gradient
-    for (int i = 0; i < N * D; i++) {
-        dC[i] = 0.0;
-    }
+    // Zero out the gradient
+    for (int i = 0; i < N * D; i++) dC[i] = 0.0;
 
-    double *xs = (double *) malloc(N * sizeof(double));
-    double *ys = (double *) malloc(N * sizeof(double));
-    double minloc = 1E5;
-    double maxloc = -1E5;
-    //Find the min of the locs
+    // For convenience, split the x and y coordinate values
+    auto *xs = new double[N];
+    auto *ys = new double[N];
+
+    double min_coord = INFINITY;
+    double max_coord = -INFINITY;
+    // Find the min/max values of the x and y coordinates
     for (unsigned long i = 0; i < N; i++) {
         xs[i] = Y[i * 2 + 0];
         ys[i] = Y[i * 2 + 1];
-        if (xs[i] > maxloc) maxloc = xs[i];
-        if (xs[i] < minloc) minloc = xs[i];
-        if (ys[i] > maxloc) maxloc = ys[i];
-        if (ys[i] < minloc) minloc = ys[i];
+        if (xs[i] > max_coord) max_coord = xs[i];
+        else if (xs[i] < min_coord) min_coord = xs[i];
+        if (ys[i] > max_coord) max_coord = ys[i];
+        else if (ys[i] < min_coord) min_coord = ys[i];
     }
-    minloc = floor(minloc);
-    maxloc = ceil(maxloc);
 
-    int ndim = 4; //number of charges
-    double *chargesQij = (double *) malloc(ndim * N * sizeof(double));
-    double *potentialQij = (double *) malloc(ndim * N * sizeof(double));
+    // The number of "charges" or s+2 sums i.e. number of kernel sums
+    int n_terms = 4;
+    auto *chargesQij = new double[N * n_terms];
+    auto *potentialsQij = new double[N * n_terms]();
 
+    // Prepare the terms that we'll use to compute the sum i.e. the repulsive forces
     for (unsigned long j = 0; j < N; j++) {
-        chargesQij[j] = 1;
-        chargesQij[1 * N + j] = Y[j * 2];
-        chargesQij[2 * N + j] = Y[j * 2 + 1];
-        chargesQij[3 * N + j] = Y[j * 2] * Y[j * 2] + Y[j * 2 + 1] * Y[j * 2 + 1];
+        chargesQij[j * n_terms + 0] = 1;
+        chargesQij[j * n_terms + 1] = xs[j];
+        chargesQij[j * n_terms + 2] = ys[j];
+        chargesQij[j * n_terms + 3] = xs[j] * xs[j] + ys[j] * ys[j];
     }
 
-    int nlat = fmax(min_num_intervals, (maxloc - minloc) / (double) intervals_per_integer);
-//	printf("%d nodes, from %lf to %lf, so using nlat=%d\n",nterms, minloc, maxloc, nlat);
-    int nboxes = nlat * nlat;
+    // Compute the number of boxes in a single dimension and the total number of boxes in 2d
+    auto n_boxes_per_dim = static_cast<int>(fmax(min_num_intervals, (max_coord - min_coord) / intervals_per_integer));
+    int n_boxes = n_boxes_per_dim * n_boxes_per_dim;
 
+    auto *box_lower_bounds = new double[2 * n_boxes];
+    auto *box_upper_bounds = new double[2 * n_boxes];
+    auto *y_tilde_spacings = new double[n_interpolation_points];
+    int n_interpolation_points_1d = n_interpolation_points * n_boxes_per_dim;
+    auto *x_tilde = new double[n_interpolation_points_1d]();
+    auto *y_tilde = new double[n_interpolation_points_1d]();
+    auto *fft_kernel_tilde = new complex<double>[2 * n_interpolation_points_1d * 2 * n_interpolation_points_1d];
 
-    double *band = (double *) calloc(N, sizeof(double));
-    double *boxl = (double *) malloc(2 * nboxes * sizeof(double));
-    double *boxr = (double *) malloc(2 * nboxes * sizeof(double));
-    double *prods = (double *) malloc(nterms * sizeof(double));
-    double *xpts = (double *) malloc(nterms * sizeof(double));
-    int nfourh = nterms * nlat;
-    double *xptsall = (double *) calloc(nfourh * nfourh, sizeof(double));
-    double *yptsall = (double *) calloc(nfourh * nfourh, sizeof(double));
-    int *irearr = (int *) calloc(nfourh * nfourh, sizeof(int));
+    precompute_2d(max_coord, min_coord, max_coord, min_coord, n_boxes_per_dim, n_interpolation_points,
+                  &squared_cauchy_2d,
+                  box_lower_bounds, box_upper_bounds, y_tilde_spacings, x_tilde, y_tilde, fft_kernel_tilde);
+    n_body_fft_2d(N, n_terms, xs, ys, chargesQij, n_boxes_per_dim, n_interpolation_points, box_lower_bounds,
+                  box_upper_bounds, y_tilde_spacings, fft_kernel_tilde, potentialsQij);
 
-    clock_t startTime = clock();
-    fftw_complex *zkvalf = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * 2 * nfourh * 2 * nfourh);
-    precompute2(maxloc, minloc, maxloc, minloc, nlat, nterms, &cauchy2d, band, boxl, boxr, prods, xpts, xptsall,
-                yptsall, irearr, zkvalf);
-    nbodyfft2(N, ndim, xs, ys, chargesQij, nlat, nterms, boxl, boxr, prods, xpts, xptsall, yptsall, irearr, zkvalf,
-              potentialQij);
-
-    double zSum = 0;
+    // Compute the normalization constant Z or sum of q_{ij}. This expression is different from the one in the original
+    // paper, but equivalent. This is done so we need only use a single kernel (K_2 in the paper) instead of two
+    // different ones. We subtract N at the end because the following sums over all i, j, whereas Z contains i \neq j
+    double sum_Q = 0;
     for (unsigned long i = 0; i < N; i++) {
-        double phi1 = potentialQij[i];
-        double phi2 = potentialQij[1 * N + i];
-        double phi3 = potentialQij[2 * N + i];
-        double phi4 = potentialQij[3 * N + i];
-        double Y_i_1 = Y[i * 2];
-        double Y_i_2 = Y[i * 2 + 1];
+        double phi1 = potentialsQij[i * n_terms + 0];
+        double phi2 = potentialsQij[i * n_terms + 1];
+        double phi3 = potentialsQij[i * n_terms + 2];
+        double phi4 = potentialsQij[i * n_terms + 3];
 
-        zSum += (1 + Y_i_1 * Y_i_1 + Y_i_2 * Y_i_2) * phi1 - 2 * (Y_i_1 * phi2 + Y_i_2 * phi3) + phi4;
+        sum_Q += (1 + xs[i] * xs[i] + ys[i] * ys[i]) * phi1 - 2 * (xs[i] * phi2 + ys[i] * phi3) + phi4;
     }
-    zSum -= N;
-    //printf("zSum from the new calc is %le\n\n", zSum2);
-    clock_t end2 = clock();
-    double time_spent2 = (double) (end2 - startTime) / CLOCKS_PER_SEC;
-    //printf("%d points in 2D with %d charges from %f to %f. nlat: %d, nterms: %d, so (nlat*nlat*nterms)^2 = %d point FFT. \nFast: %.2e seconds, %.2e per second\n",
-    //N, ndim, minloc, maxloc,nlat,nterms,nlat*nterms*2*nlat*nterms*2,  time_spent2, N/time_spent2);
+    sum_Q -= N;
 
-    //Now, figure out the Gaussian component of the gradient.  This
-    //coresponds to the "attraction" term of the gradient.  It was
-    //calculated using a fast KNN approach, so here we just use the results
-    //that were passed to this function
+    // Now, figure out the Gaussian component of the gradient. This corresponds to the "attraction" term of the
+    // gradient. It was calculated using a fast KNN approach, so here we just use the results that were passed to this
+    // function
     unsigned int ind2 = 0;
-    double *pos_f;
-    pos_f = new double[N * 2];
+    double *pos_f = new double[N * 2];
     // Loop over all edges in the graph
     for (unsigned int n = 0; n < N; n++) {
-        pos_f[n * 2] = 0;
+        pos_f[n * 2 + 0] = 0;
         pos_f[n * 2 + 1] = 0;
 
         for (unsigned int i = inp_row_P[n]; i < inp_row_P[n + 1]; i++) {
             // Compute pairwise distance and Q-value
             ind2 = inp_col_P[i];
-            double r = (Y[n * 2] - Y[ind2 * 2]) * (Y[n * 2] - Y[ind2 * 2]) +
-                       (Y[n * 2 + 1] - Y[ind2 * 2 + 1]) * (Y[n * 2 + 1] - Y[ind2 * 2 + 1]);
-            double q_ij = 1 / (1 + r);
+            double d_ij = (xs[n] - xs[ind2]) * (xs[n] - xs[ind2]) + (ys[n] - ys[ind2]) * (ys[n] - ys[ind2]);
+            double q_ij = 1 / (1 + d_ij);
 
-            pos_f[n * 2] += inp_val_P[i] * q_ij * (Y[n * 2] - Y[ind2 * 2]);
-            pos_f[n * 2 + 1] += inp_val_P[i] * q_ij * (Y[n * 2 + 1] - Y[ind2 * 2 + 1]);
+            pos_f[n * 2 + 0] += inp_val_P[i] * q_ij * (xs[n] - xs[ind2]);
+            pos_f[n * 2 + 1] += inp_val_P[i] * q_ij * (ys[n] - ys[ind2]);
         }
     }
 
-    FILE *fp = nullptr;
-    if (measure_accuracy) {
-        char buffer[500];
-        sprintf(buffer, "temp/fft_gradient%d.txt", itTest);
-        fp = fopen(buffer, "w"); // Open file for writing
+    // Make the negative term, or F_rep in the equation 3 of the paper
+    double *neg_f = new double[N * 2];
+    for (unsigned int i = 0; i < N; i++) {
+        neg_f[i * 2 + 0] = (xs[i] * potentialsQij[i * n_terms] - potentialsQij[i * n_terms + 1]) / sum_Q;
+        neg_f[i * 2 + 1] = (ys[i] * potentialsQij[i * n_terms] - potentialsQij[i * n_terms + 2]) / sum_Q;
+
+        dC[i * 2 + 0] = pos_f[i * 2] - neg_f[i * 2];
+        dC[i * 2 + 1] = pos_f[i * 2 + 1] - neg_f[i * 2 + 1];
     }
-
-    //Make the negative term, or F_rep in the equation 3 of the paper
-    double *neg_f;
-    neg_f = new double[N * 2];
-    for (unsigned int n = 0; n < N; n++) {
-
-        double Qij_y_i_0, Qij_y_i_1, Qij_y_j_0, Qij_y_j_1, Qij_y_0, Qij_y_1;
-
-        Qij_y_i_0 = Y[2 * n] * potentialQij[n];
-        Qij_y_i_1 = Y[2 * n + 1] * potentialQij[n];
-
-        Qij_y_j_0 = potentialQij[1 * N + n];
-        Qij_y_j_1 = potentialQij[2 * N + n];
-
-        Qij_y_0 = Qij_y_i_0 - Qij_y_j_0;
-        Qij_y_1 = Qij_y_i_1 - Qij_y_j_1;
-
-        //Note that we only use the Z normalization term in the F_rep,
-        //because it cancels in the F_attr.  Also, note that we divide
-        //it, because the denominator of q_ij^2  is Z^2, so it cancels
-        //out the Z in the numerater for Equation 3
-        neg_f[n * 2] = Qij_y_0 / zSum;
-        neg_f[n * 2 + 1] = Qij_y_1 / zSum;
-
-        dC[n * 2 + 0] = pos_f[n * 2] - neg_f[n * 2];
-        dC[n * 2 + 1] = pos_f[n * 2 + 1] - neg_f[n * 2 + 1];
-        //fprintf(fp, "%d, %e, %e, %e\n",n, dC[n*2+0], pos_f[n*2], neg_f[n*2]);
-        if (measure_accuracy) {
-            fprintf(fp, "%d, %.12e, %.12e, %.12e, %.12e, %.12e  %.12e\n", n, dC[n * 2 + 0], dC[n * 2 + 1], pos_f[n * 2],
-                    pos_f[n * 2 + 1], neg_f[n * 2], neg_f[n * 2 + 1]);
-        }
-        if (n < 10) {
-            //printf("fft: %d, %e, %e, %e\n",n, dC[n*2+0], pos_f[n*2], neg_f[n*2]);
-        }
-
-    }
-    if (measure_accuracy) {
-        fclose(fp);
-    }
-    clock_t end3 = clock();
-    double time_spent3 = (double) (end3 - end2) / CLOCKS_PER_SEC;
-    //printf("Rest of it took %lf\n", time_spent3);
 
     delete[] pos_f;
     delete[] neg_f;
-    free(potentialQij);
-    free(chargesQij);
-
-    free(xs);
-    free(ys);
-    free(band);
-    free(boxl);
-    free(boxr);
-    free(prods);
-    free(xpts);
-    free(xptsall);
-    free(yptsall);
-    free(irearr);
-    fftw_free(zkvalf);
-    chargesQij = NULL;
+    delete[] potentialsQij;
+    delete[] chargesQij;
+    delete[] xs;
+    delete[] ys;
+    delete[] box_lower_bounds;
+    delete[] box_upper_bounds;
+    delete[] y_tilde_spacings;
+    delete[] y_tilde;
+    delete[] x_tilde;
+    delete[] fft_kernel_tilde;
 }
 
 
@@ -927,25 +810,20 @@ void TSNE::computeExactGradientTest(double *Y, int N, int D) {
 }
 
 
-// Compute gradient of the t-SNE cost function (exact)
+// Compute the exact gradient of the t-SNE cost function
 void TSNE::computeExactGradient(double *P, double *Y, int N, int D, double *dC) {
     // Make sure the current gradient contains zeros
     for (int i = 0; i < N * D; i++) dC[i] = 0.0;
 
     // Compute the squared Euclidean distance matrix
-    double *DD = (double *) malloc(N * N * sizeof(double));
-    if (DD == NULL) {
-        printf("Memory allocation failed!\n");
-        exit(1);
-    }
+    auto *DD = (double *) malloc(N * N * sizeof(double));
+    if (DD == nullptr) throw std::bad_alloc();
     computeSquaredEuclideanDistance(Y, N, D, DD);
 
     // Compute Q-matrix and normalization sum
-    double *Q = (double *) malloc(N * N * sizeof(double));
-    if (Q == NULL) {
-        printf("Memory allocation failed!\n");
-        exit(1);
-    }
+    auto *Q = (double *) malloc(N * N * sizeof(double));
+    if (Q == nullptr) throw std::bad_alloc();
+
     double sum_Q = .0;
     int nN = 0;
     for (int n = 0; n < N; n++) {
@@ -959,16 +837,12 @@ void TSNE::computeExactGradient(double *P, double *Y, int N, int D, double *dC) 
     }
 
     // Perform the computation of the gradient
-    char buffer[500];
-    sprintf(buffer, "temp/exact_gradient%d.txt", itTest);
-    FILE *fp = fopen(buffer, "w"); // Open file for writing
     nN = 0;
     int nD = 0;
     for (int n = 0; n < N; n++) {
         double testQij = 0;
         double testPos = 0;
         double testNeg = 0;
-        double testdC = 0;
         int mD = 0;
         for (int m = 0; m < N; m++) {
             if (n != m) {
@@ -982,18 +856,10 @@ void TSNE::computeExactGradient(double *P, double *Y, int N, int D, double *dC) 
             }
             mD += D;
         }
-        if (n < 20) {
-            testdC = testPos - testNeg;
-            //printf("dC: %e, %e testDc %e \n", dC[nD +0], dC[nD+1], testdC);
-
-        }
-        fprintf(fp, "%d, %.12e\n", n, testNeg);
         nN += N;
         nD += D;
     }
-    fclose(fp);
     free(Q);
-
 }
 
 
@@ -1173,14 +1039,12 @@ void TSNE::computeGaussianPerplexity(double *X, int N, int D, double *P, double 
 
     // Clean up memory
     free(DD);
-    DD = NULL;
 }
 
 
 // Compute input similarities using ANNOY
 int TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row_P, unsigned int** _col_P,
                                     double** _val_P, double perplexity, int K, double sigma, int num_trees, int search_k, unsigned int nthreads) {
-
     if(1 == 0) {
 		// 	TO REMOVE IN THE NEXT PULL REQUEST
     }else{
@@ -1243,10 +1107,9 @@ int TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row
         //const size_t nthreads = 1;
         {
             // Pre loop
-            std::cout<<"parallel ("<<nthreads<<" threads):"<<std::endl;
+            std::cout << "parallel (" << nthreads << " threads):" << std::endl;
             std::vector<std::thread> threads(nthreads);
-            for(int t = 0;t<nthreads;t++)
-            {
+            for (int t = 0; t < nthreads; t++) {
                 threads[t] = std::thread(std::bind(
                         [&](const int bi, const int ei, const int t)
                         {
@@ -1315,9 +1178,9 @@ void TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _ro
     for(int n = 0; n < N; n++) row_P[n + 1] = row_P[n] + (unsigned int) K;
 
     // Build ball tree on data set
-    VpTree<DataPoint, euclidean_distance>* tree = new VpTree<DataPoint, euclidean_distance>();
+    VpTree<DataPoint, euclidean_distance> *tree = new VpTree<DataPoint, euclidean_distance>();
     vector<DataPoint> obj_X(N, DataPoint(D, -1, X));
-    for(int n = 0; n < N; n++) obj_X[n] = DataPoint(D, n, X + n * D);
+    for (int n = 0; n < N; n++) obj_X[n] = DataPoint(D, n, X + n * D);
     tree->create(obj_X);
 
     // Loop over all points to find nearest neighbors
@@ -1329,10 +1192,9 @@ void TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _ro
     //const size_t nthreads = 1;
     {
         // Pre loop
-        std::cout<<"parallel ("<<nthreads<<" threads):"<<std::endl;
+        std::cout << "parallel (" << nthreads << " threads):" << std::endl;
         std::vector<std::thread> threads(nthreads);
-        for(int t = 0;t<nthreads;t++)
-        {
+        for (int t = 0; t < nthreads; t++) {
             threads[t] = std::thread(std::bind(
                     [&](const int bi, const int ei, const int t)
                     {
@@ -1482,11 +1344,9 @@ void TSNE::symmetrizeMatrix(unsigned int **_row_P, unsigned int **_col_P, double
     free(*_val_P);
     *_val_P = sym_val_P;
 
-    // Free up some memery
+    // Free up some memory
     free(offset);
-    offset = NULL;
     free(row_counts);
-    row_counts = NULL;
 }
 
 
@@ -1513,10 +1373,8 @@ void TSNE::computeSquaredEuclideanDistance(double *X, int N, int D, double *DD) 
 void TSNE::zeroMean(double *X, int N, int D) {
     // Compute data mean
     double *mean = (double *) calloc(D, sizeof(double));
-    if (mean == NULL) {
-        printf("Memory allocation failed!\n");
-        exit(1);
-    }
+    if (mean == NULL) throw std::bad_alloc();
+
     int nD = 0;
     for (int n = 0; n < N; n++) {
         for (int d = 0; d < D; d++) {
@@ -1537,7 +1395,6 @@ void TSNE::zeroMean(double *X, int N, int D) {
         nD += D;
     }
     free(mean);
-    mean = NULL;
 }
 
 
@@ -1662,7 +1519,6 @@ void TSNE::save_data(const char *result_path, double* data, int* landmarks, doub
 }
 
 
-// Function that runs the Barnes-Hut implementation of t-SNE
 int main(int argc, char *argv[]) {
 	printf("=============== t-SNE ===============\n");
 
