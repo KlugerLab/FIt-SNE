@@ -540,7 +540,11 @@ public:
   void unload() {
     if (_fd) {
       // we have mmapped data
-      close(_fd);
+#ifdef _WIN32
+	_close(_fd);
+#else
+    close(_fd);
+#endif	
       off_t size = _n_nodes * _s;
       munmap(_nodes, size);
     } else if (_nodes) {
@@ -552,12 +556,20 @@ public:
   }
 
   bool load(const char* filename) {
+#ifdef _WIN32
+    _fd = _open(filename, O_RDONLY, (int)0400);
+#else
     _fd = open(filename, O_RDONLY, (int)0400);
+#endif	
     if (_fd == -1) {
       _fd = 0;
       return false;
     }
+#ifdef _WIN32
+    off_t size = _lseek(_fd, 0, SEEK_END);
+#else
     off_t size = lseek(_fd, 0, SEEK_END);
+#endif
 #ifdef MAP_POPULATE
     _nodes = (Node*)mmap(
         0, size, PROT_READ, MAP_SHARED | MAP_POPULATE, _fd, 0);
