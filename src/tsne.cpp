@@ -30,7 +30,7 @@
  *
  */
 
-#include "stdafx.h"
+#include "winlibs/stdafx.h"
 
 #include <iostream>
 #include <time.h>
@@ -38,7 +38,7 @@
 #include "nbodyfft.h"
 
 #ifdef _WIN32
-#include "fftw3.h"
+#include "winlibs/fftw3.h"
 #else
 #include <fftw3.h>
 #endif
@@ -57,7 +57,7 @@
 #include "tsne.h"
 
 #ifdef _WIN32
-#include "unistd.h"
+#include "winlibs/unistd.h"
 #else
 #include <unistd.h>
 #endif

@@ -1,4 +1,4 @@
-#include "stdafx.h"
+#include "winlibs/stdafx.h"
 
 #include "nbodyfft.h"
 #define PI 3.14159265358979323846

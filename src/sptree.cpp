@@ -30,7 +30,7 @@
  *
  */
 
-#include "stdafx.h"
+#include "winlibs/stdafx.h"
 #include <math.h>
 #include <float.h>
 #include <stdlib.h>

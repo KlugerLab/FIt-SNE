@@ -36,7 +36,7 @@ typedef signed __int32    int32_t;
 
 #ifdef _MSC_VER
 #define NOMINMAX
-#include "mman.h"
+#include "winlibs/mman.h"
 #include <windows.h>
 #else
 #include <sys/mman.h>
