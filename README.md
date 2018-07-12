@@ -21,7 +21,7 @@ The only prerequisite is [FFTW](http://www.fftw.org/), which can be downloaded a
 And you're good to go! Check out `examples/` for usage.
 
 ### Windows
-Open the provided FItSNE solution (FItSNE.sln) using MS Visual Studio and rebuild it. Tested with MS Visual Studio 2015 (i.e., MS Visual Studio Version 14). Note that for Windows, we have added all dependencies including the FFWT library, which is distributed under the GNU General Public License. See http://www.fftw.org/ for more details.
+Open the provided FItSNE solution (FItSNE.sln) using MS Visual Studio and rebuild it. Tested with MS Visual Studio 2015 (i.e., MS Visual Studio Version 14). Note that for Windows, we have added all dependencies including the FFWT library, which is distributed under the GNU General Public License. See http://www.fftw.org/ for more details. Also, in order to run the generated FItSNE.exe, you will need the DLLs located in src/winlibs/fftw to be on your path; the easiest way is to copy those to the same directory with FItSNE.exe.
 
 **Note:** If you update to a new version of FIt-SNE using `git pull`, be sure to recompile. 
 
