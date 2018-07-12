@@ -1,4 +1,3 @@
-
 fftRtsne <- function(X, 
 		     dims=2, perplexity=30, theta=0.5,
 		     check_duplicates=TRUE,
@@ -12,7 +11,16 @@ fftRtsne <- function(X,
 		     nterms=3, intervals_per_integer=1, min_num_intervals=50, 
 		     K=-1, sigma=-30, initialization=NULL,
 		     data_path=NULL, result_path=NULL,
-		     fast_tsne_path='bin/fast_tsne', nthreads=0, ...) {
+		     fast_tsne_path=NULL, nthreads=0, ...) {
+
+	if (is.null(fast_tsne_path)) {
+		if(.Platform$OS.type == "unix") {
+			fast_tsne_path='bin/fast_tsne'
+		} else {
+			fast_tsne_path='bin/FItSNE.exe'
+		}
+	}
+
 	if (is.null(data_path)) {
 		data_path <- tempfile(pattern='fftRtsne_data_', fileext='.dat')
 	}
