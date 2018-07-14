@@ -30,13 +30,19 @@
  *
  */
 
-
+#include "winlibs/stdafx.h"
 
 #include <iostream>
 #include <time.h>
 #include <fstream>
 #include "nbodyfft.h"
+
+#ifdef _WIN32
+#include "winlibs/fftw3.h"
+#else
 #include <fftw3.h>
+#endif
+
 #include <math.h>
 #include "annoylib.h"
 #include "kissrandom.h"
@@ -49,9 +55,17 @@
 #include "vptree.h"
 #include "sptree.h"
 #include "tsne.h"
+
+#ifdef _WIN32
+#include "winlibs/unistd.h"
+#else
 #include <unistd.h>
+#endif
+
 #include <sstream>
 #include <functional>
+
+#define _CRT_SECURE_NO_WARNINGS
 
 int itTest = 0;
 bool measure_accuracy = false;
@@ -147,7 +161,7 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 	}
 
 	// Compute input similarities for exact t-SNE
-	double* P; unsigned int* row_P; unsigned int* col_P; double* val_P;
+	double* P=nullptr; unsigned int* row_P=nullptr; unsigned int* col_P=nullptr; double* val_P=nullptr;
 	if(exact) {
 
 		// Compute similarities
@@ -392,7 +406,7 @@ void TSNE::computeGradient(double* P, unsigned int* inp_row_P, unsigned int* inp
 	for(int n = 0; n < N; n++) tree->computeNonEdgeForces(n, theta, neg_f + n * D, &sum_Q);
 
 	// Compute final t-SNE gradient
-	FILE * fp;
+	FILE * fp = nullptr;
 	if (measure_accuracy){
 		char buffer[500];
 		sprintf(buffer,"temp/bh_gradient%d.txt", itTest);
@@ -627,7 +641,7 @@ void TSNE::computeFftGradient(double* P, unsigned int* inp_row_P, unsigned int* 
 		}
 	}
 
-	FILE* fp;
+	FILE* fp = nullptr;
 	if (measure_accuracy){
 		char buffer[500];
 		sprintf(buffer,"temp/fft_gradient%d.txt", itTest);
