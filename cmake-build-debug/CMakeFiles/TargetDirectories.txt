@@ -1,3 +1,0 @@
-/home/pavlin/dev/FIt-SNE/cmake-build-debug/CMakeFiles/rebuild_cache.dir
-/home/pavlin/dev/FIt-SNE/cmake-build-debug/CMakeFiles/bin/fast_tsne.dir
-/home/pavlin/dev/FIt-SNE/cmake-build-debug/CMakeFiles/edit_cache.dir
