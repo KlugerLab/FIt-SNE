@@ -1,4 +1,4 @@
-function [mappedX, costs, initialError] = fast_tsne(X,  opts)
+function [mappedX, costs, initialError] = fast_tsne(X, opts)
 %FAST_TSNE Runs the C++ implementation of FMM t-SNE
 %
 %   mappedX = fast_tsne(X, opts, initial_data)
@@ -48,6 +48,14 @@ function [mappedX, costs, initialError] = fast_tsne(X,  opts)
 %                   and opts.intervals_per_integer must be >0. Default:
 %                   opts.min_num_intervals=50, opts.intervals_per_integer =
 %                   1
+%
+%                   opts.sigma - Fixed sigma value to use when perplexity==-1
+%                        Default -1 (None)
+%                   opts.K - Number of nearest neighbours to get when using fixed sigma
+%                        Default -30 (None)
+%
+%                   opts.initialization - N x no_dims array to intialize the solution
+%                        Default: None
 
 
 
@@ -158,8 +166,17 @@ function [mappedX, costs, initialError] = fast_tsne(X,  opts)
             knn_algo = 1;
         end
     end
-    
-    
+
+    if (~isfield(opts, 'K'))
+        K = -1;
+    else
+        K = opts.K;
+    end
+    if (~isfield(opts, 'sigma'))
+        sigma = -30;
+    else
+        sigma = opts.sigma;
+    end
 
     if (~isfield(opts, 'no_momentum_during_exag'))
         no_momentum_during_exag = 0;
@@ -172,7 +189,11 @@ function [mappedX, costs, initialError] = fast_tsne(X,  opts)
         n_trees = opts.n_trees;
     end
     if (~isfield(opts, 'search_k'))
-        search_k = 3*perplexity*n_trees;
+	if perplexity > 0
+	        search_k = 3*perplexity*n_trees;
+	else
+		search_k = 3*K*n_trees;
+	end
     else
         search_k = opts.search_k;
     end
@@ -194,10 +215,12 @@ function [mappedX, costs, initialError] = fast_tsne(X,  opts)
     else
         min_num_intervals = opts.min_num_intervals;
     end
-    
-    K = -1;
-    sigma = -30;
 
+    if (~isfield(opts, 'initialization'))
+        initialization = nan;
+    else
+        initialization = double(opts.initialization);
+    end
     
     X = double(X);
     
@@ -212,7 +235,7 @@ function [mappedX, costs, initialError] = fast_tsne(X,  opts)
     write_data('temp/data.dat',X, no_dims, theta, perplexity, max_iter, ...
         stop_lying_iter, K, sigma, nbody_algo,no_momentum_during_exag, knn_algo,...
         early_exag_coeff,n_trees, search_k,start_late_exag_iter, late_exag_coeff,rand_seed,...
-        nterms,intervals_per_integer,min_num_intervals );
+        nterms,intervals_per_integer,min_num_intervals,initialization);
 
     disp('Data written');
     tic
@@ -231,17 +254,18 @@ end
 function write_data(filename, X, no_dims, theta, perplexity, max_iter,...
     stop_lying_iter,K, sigma, nbody_algo,no_momentum_during_exag, knn_algo,...
     early_exag_coeff,n_trees, search_k,start_late_exag_iter, late_exag_coeff,rand_seed,...
-    nterms,intervals_per_integer,min_num_intervals)
+    nterms,intervals_per_integer,min_num_intervals,initialization)
+
     [n, d] = size(X);
-    %h = fopen('data.dat', 'wb');
+
     h = fopen(filename, 'wb');
-	fwrite(h, n, 'integer*4');
-	fwrite(h, d, 'integer*4');
+    fwrite(h, n, 'integer*4');
+    fwrite(h, d, 'integer*4');
     fwrite(h, theta, 'double');
     fwrite(h, perplexity, 'double');
-	fwrite(h, no_dims, 'integer*4');
+    fwrite(h, no_dims, 'integer*4');
     fwrite(h, max_iter, 'integer*4');
-        fwrite(h, stop_lying_iter, 'integer*4');
+    fwrite(h, stop_lying_iter, 'integer*4');
     fwrite(h, K, 'int');
     fwrite(h, sigma, 'double');
     fwrite(h, nbody_algo, 'int');
@@ -252,16 +276,15 @@ function write_data(filename, X, no_dims, theta, perplexity, max_iter,...
     fwrite(h, search_k, 'int');
     fwrite(h, start_late_exag_iter, 'int');
     fwrite(h, late_exag_coeff, 'double');
-    
     fwrite(h, nterms, 'int');
     fwrite(h, intervals_per_integer, 'double');
     fwrite(h, min_num_intervals, 'int');
-
-    
     fwrite(h, X', 'double');
-        fwrite(h, rand_seed, 'integer*4');
-
-	fclose(h);
+    fwrite(h, rand_seed, 'integer*4');
+    if ~isnan(initialization)
+	fwrite(h, initialization', 'double');
+    end
+    fclose(h);
 end
 
 

@@ -46,15 +46,15 @@ public:
         int nbody_algo, int knn_algo, double early_exag_coeff,double * initialError, double* costs, bool no_momentum_during_exag,
 		int start_late_exag_iter, double late_exag_coeff, int n_trees,int search_k,int nterms, double intervals_per_integer, 
         int min_num_intervals, unsigned int nthreads);
-    bool load_data(const char *data_path, double** data, int* n, int* d, int* no_dims, double* theta,
+
+    bool load_data(const char *data_path, double** data, double** Y, int* n, int* d, int* no_dims, double* theta,
 		    double* perplexity, int* rand_seed, int* max_iter, int*
 		    stop_lying_iter, int* K, double * sigma, int* nbody_algo,
 		    int* compexag, double* early_exag_coeff,  int *
 		    no_momentum_during_exag, int * n_trees, int * search_k,
 		    int* start_late_exag_iter, double *late_exag_coeff,
-	       	    int * nterms, double * intervals_per_integer, int *min_num_intervals
-		    );
-    //bool load_initial_data(double** data);
+	       	    int * nterms, double * intervals_per_integer, int *min_num_intervals, bool *skip_random_init);
+
     void save_data(const char *result_path, double* data, int* landmarks, double* costs, int n, int d, double initialError);
     void symmetrizeMatrix(unsigned int** row_P, unsigned int** col_P, double** val_P, int N); // should be static!
 
@@ -68,6 +68,7 @@ private:
     double evaluateError(double* P, double* Y, int N, int D);
     double evaluateError(unsigned int* row_P, unsigned int* col_P, double* val_P, double* Y, int N, int D, double theta);
     void zeroMean(double* X, int N, int D);
+    double distances2similarities(double *D, double *P, int N, int n, double perplexity, double sigma, bool ifSquared);
     void computeGaussianPerplexity(double* X, int N, int D, double* P, double perplexity, double sigma);
     void computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row_P, unsigned int** _col_P, double** _val_P, double perplexity, int K, double sigma, unsigned int nthreads);
     int computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row_P, unsigned int** _col_P, double** _val_P, double perplexity, int K, double sigma, int num_trees, int search_k, unsigned int nthreads);
