@@ -16,7 +16,7 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
               early_exag_coeff=12, no_momentum_during_exag=0, n_trees=50, 
               search_k=None, start_late_exag_iter=-1, late_exag_coeff=-1,
               nterms=3, intervals_per_integer=1, min_num_intervals=50,            
-              seed=-1, initialization=None):
+              seed=-1, initialization=None, load_affinities=None):
     
     if search_k is None:
         if perplexity > 0:
@@ -33,6 +33,13 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
         knn_algo = 2
     else:
         knn_algo = 1
+
+    if load_affinities == 'load':
+        load_affinities = 1
+    elif load_affinities == 'save':
+        load_affinities = 2
+    else:
+        load_affinities = 0
     
     # create temp directory if it does not exist
     if not os.path.isdir(os.getcwd()+'/temp'):
@@ -63,6 +70,7 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
         f.write(struct.pack('=i', min_num_intervals))
         f.write(X.tobytes()) 
         f.write(struct.pack('=i', seed))
+        f.write(struct.pack('=i', load_affinities))
 
         if initialization is not None:
                 f.write(initialization.tobytes()) 

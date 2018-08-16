@@ -56,7 +56,10 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
 %
 %                   opts.initialization - N x no_dims array to intialize the solution
 %                        Default: None
-
+%
+%		    opts.load_affinities - can be 'load', 'save', or 'none' (default)
+%			 If 'save', input similarities are saved into a file.
+%                        If 'load', input similarities are loaded from a file and not computed
 
 
 % Runs the C++ implementation of fast t-SNE using either the IFt-SNE
@@ -221,6 +224,18 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
     else
         initialization = double(opts.initialization);
     end
+
+    if (~isfield(opts, 'load_affinities'))
+        load_affinities = 0;
+    else
+	if opts.load_affinities == 'load'
+            load_affinities = 1;
+        elseif opts.load_affinities == 'save'
+            load_affinities = 2;
+	else
+            load_affinities = 0;
+	end
+    end
     
     X = double(X);
     
@@ -281,6 +296,7 @@ function write_data(filename, X, no_dims, theta, perplexity, max_iter,...
     fwrite(h, min_num_intervals, 'int');
     fwrite(h, X', 'double');
     fwrite(h, rand_seed, 'integer*4');
+    fwrite(h, load_affinities, 'integer*4');
     if ~isnan(initialization)
 	fwrite(h, initialization', 'double');
     end

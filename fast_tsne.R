@@ -11,6 +11,7 @@ fftRtsne <- function(X,
 		     nterms=3, intervals_per_integer=1, min_num_intervals=50, 
 		     K=-1, sigma=-30, initialization=NULL,
 		     data_path=NULL, result_path=NULL,
+		     load_affinities=NULL,
 		     fast_tsne_path=NULL, nthreads=0, ...) {
 
 	if (is.null(fast_tsne_path)) {
@@ -51,6 +52,18 @@ fftRtsne <- function(X,
 	}else{
 	  nbody_algo = 1;
 	}
+
+	if (is.null(load_affinities)) {
+		load_affinities = 0;
+	} else {
+		if (load_affinities == 'load') {
+			load_affinities = 1;
+		} else if (load_affinities == 'save') {
+			load_affinities = 2;
+		} else {
+			load_affinities = 0;
+		}
+	}
 	
 	if (ann_not_vptree){
 	  knn_algo = 1;
@@ -86,6 +99,7 @@ fftRtsne <- function(X,
 	tX = c(t(X))
 	writeBin( tX, f) 
 	writeBin( as.integer(rand_seed), f,size=4) 
+	writeBin( as.integer(load_affinities), f,size=4) 
 	if (! is.null(initialization)){ writeBin( c(t(initialization)), f) }		
 	close(f) 
 

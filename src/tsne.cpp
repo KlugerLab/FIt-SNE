@@ -100,11 +100,13 @@ void print_progress ( int iter, double * Y, int N, int no_dims){
 }
 
 // Perform t-SNE
-int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity, double theta, int rand_seed,
-		bool skip_random_init, int max_iter, int stop_lying_iter, 
-		int mom_switch_iter, int K, double sigma, int nbody_algo, int knn_algo, double early_exag_coeff,double * initialError, double * costs, bool no_momentum_during_exag,
-		int start_late_exag_iter, double late_exag_coeff, int n_trees,int search_k,
-		int nterms, double intervals_per_integer, int min_num_intervals, unsigned int nthreads) {
+int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity, double theta,
+		int rand_seed, bool skip_random_init, int max_iter, int stop_lying_iter, 
+		int mom_switch_iter, int K, double sigma, int nbody_algo, int knn_algo,
+		double early_exag_coeff, double *initialError, double *costs,
+		bool no_momentum_during_exag, int start_late_exag_iter, double late_exag_coeff,
+		int n_trees, int search_k, int nterms, double intervals_per_integer,
+		int min_num_intervals, unsigned int nthreads, int load_affinities) {
 
 	// Set random seed
 	if (skip_random_init != true) {
@@ -117,16 +119,19 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 		}
 	}
 
-	// Determine whether we are using an exact algorithm
+	// Some logging messages
 	if(N - 1 < 3 * perplexity) { printf("Perplexity too large for the number of data points!\n"); exit(1); }
-
 	if (no_momentum_during_exag) {
-		printf("No momentum during the exaggeration phase\n");
+		printf("No momentum during the exaggeration phase.\n");
 	}else{
-		printf("Will use momentum during exaggeration phase\n");
+		printf("Will use momentum during exaggeration phase.\n");
 	}
-	printf("Using no_dims = %d, max_iter = %d, perplexity = %f, theta = %f, K = %d, Sigma = %lf, knn_algo = %d, early_exag_coeff = %f, data[0] = %lf\n", no_dims, max_iter, perplexity, theta, K, sigma, knn_algo, early_exag_coeff, X[0]);
+	printf("Using no_dims = %d, max_iter = %d, perplexity = %f, theta = %f,\n"
+		"      K = %d, Sigma = %lf, knn_algo = %d, early_exag_coeff = %f,\n"
+		"      data[0] = %lf\n",
+		no_dims, max_iter, perplexity, theta, K, sigma, knn_algo, early_exag_coeff, X[0]);
 
+	// Determine whether we are using an exact algorithm
 	bool exact = (theta == .0) ? true : false;
 
 	// Set learning parameters
@@ -149,98 +154,210 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 	//struct timespec start_timespec, finish_timespec;
 	//clock_gettime(CLOCK_MONOTONIC, &start_timespec);
 	zeroMean(X, N, D);
-	if (perplexity >0) {
-		printf( "Using perplexity, so normalize input data (to prevent numerical problems)\n");
+	if (perplexity > 0) {
+		printf("Using perplexity, so normalizing input data (to prevent numerical problems).\n");
 		double max_X = .0;
 		for(int i = 0; i < N * D; i++) {
 			if(fabs(X[i]) > max_X) max_X = fabs(X[i]);
 		}
 		for(int i = 0; i < N * D; i++) X[i] /= max_X;
 	}else{
-		printf("No perplexity, so do not normalize.\n");
+		printf("Not using perplexity, so data are left un-normalized.\n");
 	}
 
 	// Compute input similarities for exact t-SNE
 	double* P=nullptr; unsigned int* row_P=nullptr; unsigned int* col_P=nullptr; double* val_P=nullptr;
 	if(exact) {
 
-		// Compute similarities
-		printf("Theta set to 0, so running exact algorithm\n");
-		P = (double*) malloc(N * N * sizeof(double));
-		if(P == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+		// Loading input similarities if load_affinities == 1
+		if (load_affinities == 1) {
+			printf("Loading exact input similarities from file...\n");
 
-		computeGaussianPerplexity(X, N, D, P, perplexity, sigma);
+			P = (double*) malloc(N * N * sizeof(double));
+			if(P == NULL) { printf("Memory allocation failed!\n"); exit(1); }
 
-		// Symmetrize input similarities
-		printf("Symmetrizing...\n");
-		int nN = 0;
-		for(int n = 0; n < N; n++) {
-			int mN = (n + 1) * N;
-			for(int m = n + 1; m < N; m++) {
-				P[nN + m] += P[mN + n];
-				P[mN + n]  = P[nN + m];
-				mN += N;
+			FILE *h;
+			size_t result; 
+			if((h = fopen("temp/P.dat", "rb")) == NULL) {
+				printf("Error: could not open data file.\n");
+				return -2;
 			}
-			nN += N;
+			result = fread(P, sizeof(double), N * N, h);
+			fclose(h);
 		}
-		double sum_P = .0;
-		for(int i = 0; i < N * N; i++) sum_P += P[i];
-		for(int i = 0; i < N * N; i++) P[i] /= sum_P;
-		//sum_P is just a cute way of writing 2N
-		printf("Finished exact calculation of the P.  Sum_p: %lf \n", sum_P);
+		else {
+			// Compute similarities
+			printf("Theta set to 0, so running exact algorithm.\n");
+			P = (double*) malloc(N * N * sizeof(double));
+			if(P == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+
+			computeGaussianPerplexity(X, N, D, P, perplexity, sigma);
+
+			// Symmetrize input similarities
+			printf("Symmetrizing...\n");
+			int nN = 0;
+			for(int n = 0; n < N; n++) {
+				int mN = (n + 1) * N;
+				for(int m = n + 1; m < N; m++) {
+					P[nN + m] += P[mN + n];
+					P[mN + n]  = P[nN + m];
+					mN += N;
+				}
+				nN += N;
+			}
+			double sum_P = .0;
+			for(int i = 0; i < N * N; i++) sum_P += P[i];
+			for(int i = 0; i < N * N; i++) P[i] /= sum_P;
+			//sum_P is just a cute way of writing 2N
+			printf("Finished exact calculation of the P.  Sum_p: %lf \n", sum_P);
+		}
+		// Saving input similarities if load_affinities == 2
+		if (load_affinities == 2) { 
+			printf("Saving exact input similarities to file...\n");	
+
+			FILE *h;
+			if((h = fopen("temp/P.dat", "w+b")) == NULL) {
+				printf("Error: could not open data file.\n");
+				return -2;
+			}
+			fwrite(P, sizeof(double), N * N, h);
+			fclose(h);
+		}
 	}
 
 	// Compute input similarities for approximate t-SNE
 	else {
-		// Compute asymmetric pairwise input similarities
-		int K_to_use;
-		double sigma_to_use;
+		// Loading input similarities if load_affinities == 1
+		if (load_affinities == 1) {
+			printf("Loading approximate input similarities from files...\n");
 
-		if (perplexity < 0 ) {
-			printf("Using manually set kernel width\n");
-			K_to_use = K;
-			sigma_to_use = sigma;
-		} else {
-			printf("Using perplexity, not the manually set kernel width.  K (number of nearest neighbors) and sigma (bandwidth) parameters are going to be ignored.\n");
-			K_to_use = (int) 3 * perplexity;
-			sigma_to_use = -1;
+			row_P = (unsigned int*) malloc((N + 1) * sizeof(unsigned int));
+			if(row_P == NULL) { 
+				printf("Memory allocation failed!\n"); exit(1); 
+			}
+
+			FILE *h;
+			size_t result; 
+			if((h = fopen("temp/row_P.dat", "rb")) == NULL) {
+				printf("Error: could not open data file.\n");
+				return -2;
+			}
+			result = fread(row_P, sizeof(unsigned int), N + 1, h);
+			fclose(h);
+
+			int numel = row_P[N];
+			col_P = (unsigned int*) calloc(numel, sizeof(unsigned int));
+			val_P = (double*)       calloc(numel, sizeof(double));
+			if(col_P == NULL || val_P == NULL) { 
+				printf("Memory allocation failed!\n"); exit(1); 
+			}			
+
+			if((h = fopen("temp/val_P.dat", "rb")) == NULL) {
+				printf("Error: could not open data file.\n");
+				return -2;
+			}
+			result = fread(val_P, sizeof(double), numel, h);
+			fclose(h);
+
+			if((h = fopen("temp/col_P.dat", "rb")) == NULL) {
+				printf("Error: could not open data file.\n");
+				return -2;
+			}
+			result = fread(col_P, sizeof(unsigned int), numel, h);
+			fclose(h);
+			
+			printf("   val_P: %f %f %f ... %f %f %f\n", val_P[0], val_P[1], val_P[2], 
+				val_P[numel-3], val_P[numel-2], val_P[numel-1]);
+			printf("   col_P: %d %d %d ... %d %d %d\n", col_P[0], col_P[1], col_P[2], 
+				col_P[numel-3], col_P[numel-2], col_P[numel-1]);
+			printf("   row_P: %d %d %d ... %d %d %d\n", row_P[0], row_P[1], row_P[2], 
+				row_P[N-2], row_P[N-1], row_P[N]);
 		}
+		else {
+			// Compute asymmetric pairwise input similarities
+			int K_to_use;
+			double sigma_to_use;
+
+			if (perplexity < 0 ) {
+				printf("Using manually set kernel width\n");
+				K_to_use = K;
+				sigma_to_use = sigma;
+			} else {
+				printf("Using perplexity, not the manually set kernel width.  K (number of nearest neighbors) and sigma (bandwidth) parameters are going to be ignored.\n");
+				K_to_use = (int) 3 * perplexity;
+				sigma_to_use = -1;
+			}
 		
-		if (knn_algo == 1) {
-			printf("Using ANNOY for knn search, with parameters: n_trees %d and search_k %d\n", n_trees, search_k);
-			int error_code = 0;
-			error_code = computeGaussianPerplexity(X, N, D, &row_P, &col_P, &val_P, perplexity, K_to_use, sigma_to_use, n_trees, search_k, nthreads);
-			if (error_code <0) return error_code;
-		} else if (knn_algo == 2) {
-			printf("Using VP trees for nearest neighbor search\n");
-			computeGaussianPerplexity(X, N, D, &row_P, &col_P, &val_P, perplexity, K_to_use, sigma_to_use, nthreads);
-		} else {
-			printf("Invalid knn_algo param\n");
-			free(dY);
-			free(uY);
-			free(gains);
-			exit(1);
+			if (knn_algo == 1) {
+				printf("Using ANNOY for knn search, with parameters: n_trees %d and search_k %d\n", n_trees, search_k);
+				int error_code = 0;
+				error_code = computeGaussianPerplexity(X, N, D, &row_P, &col_P, &val_P, perplexity, K_to_use, sigma_to_use, n_trees, search_k, nthreads);
+				if (error_code <0) return error_code;
+			} else if (knn_algo == 2) {
+				printf("Using VP trees for nearest neighbor search\n");
+				computeGaussianPerplexity(X, N, D, &row_P, &col_P, &val_P, perplexity, K_to_use, sigma_to_use, nthreads);
+			} else {
+				printf("Error: Invalid knn_algo param\n");
+				free(dY);
+				free(uY);
+				free(gains);
+				exit(1);
+			}
+
+			// Symmetrize input similarities
+			printf("Symmetrizing...\n");
+			symmetrizeMatrix(&row_P, &col_P, &val_P, N);
+			double sum_P = .0;
+			for(int i = 0; i < row_P[N]; i++) sum_P += val_P[i];
+			for(int i = 0; i < row_P[N]; i++) val_P[i] /= sum_P;
 		}
 
-		// Symmetrize input similarities
-		printf("Symmetrizing...\n");
-		symmetrizeMatrix(&row_P, &col_P, &val_P, N);
-		double sum_P = .0;
-		for(int i = 0; i < row_P[N]; i++) sum_P += val_P[i];
-		for(int i = 0; i < row_P[N]; i++) val_P[i] /= sum_P;
+		// Saving input similarities if load_affinities == 2
+		if (load_affinities == 2) { 
+			printf("Saving approximate input similarities to files...\n");
+			int numel = row_P[N];
+
+			FILE *h;
+			if((h = fopen("temp/val_P.dat", "w+b")) == NULL) {
+				printf("Error: could not open data file.\n");
+				return -2;
+			}
+			fwrite(val_P, sizeof(double), numel, h);
+			fclose(h);
+
+			if((h = fopen("temp/col_P.dat", "w+b")) == NULL) {
+				printf("Error: could not open data file.\n");
+				return -2;
+			}
+			fwrite(col_P, sizeof(unsigned int), numel, h);
+			fclose(h);
+
+			if((h = fopen("temp/row_P.dat", "w+b")) == NULL) {
+				printf("Error: could not open data file.\n");
+				return -2;
+			}
+			fwrite(row_P, sizeof(unsigned int), N + 1, h);
+			fclose(h);
+
+			printf("   val_P: %f %f %f ... %f %f %f\n", val_P[0], val_P[1], val_P[2], 
+				val_P[numel-3], val_P[numel-2], val_P[numel-1]);
+			printf("   col_P: %d %d %d ... %d %d %d\n", col_P[0], col_P[1], col_P[2], 
+				col_P[numel-3], col_P[numel-2], col_P[numel-1]);
+			printf("   row_P: %d %d %d ... %d %d %d\n", row_P[0], row_P[1], row_P[2], 
+				row_P[N-2], row_P[N-1], row_P[N]);
+		}
 	}
 	end = clock();
 
-
 	// Initialize solution (randomly)
 	if (skip_random_init != true) {
-		printf("Randomly initializing the solution\n");
+		printf("Randomly initializing the solution.\n");
 		for(int i = 0; i < N * no_dims; i++) Y[i] = randn() * .0001;
 	}else{
-		printf("Using the given initialization\n");
+		printf("Using the given initialization.\n");
 	}
 
-	// If we are doing early exaggeration, we premultiply all the P by the coefficient of early exaggeration, compexagcoef
+	// If we are doing early exaggeration, we premultiply all the P by the coefficient of early exaggeration
 	double max_sum_cols = 0;
 	//Compute maximum possible exaggeration coefficient, if user requests
 	if (early_exag_coeff == 0 ) {
@@ -275,17 +392,18 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 	//double elapsed_input = (finish_timespec.tv_sec - start_timespec.tv_sec);
 	//printf("Input similarities learned in %lf seconds\n", elapsed_input);
 
-	if(exact) printf("Input similarities computed \nLearning embedding...\n");
-	else printf("Input similarities computed (sparsity = %f)!\nLearning embedding...\n", (double) row_P[N] / ((double) N * (double) N));
+	if(exact) printf("Input similarities computed.\nLearning embedding...\n");
+	else printf("Input similarities computed (sparsity = %f).\nLearning embedding...\n",
+                    (double) row_P[N] / ((double) N * (double) N));
 
 	start = clock();
 	if (!exact) {
 		if (nbody_algo == 2) {
 			printf("Using FIt-SNE approximation.\n");
 		}else if(nbody_algo == 1) {
-			printf("Using the Barnes Hut approximation.\n");
+			printf("Using the Barnes-Hut approximation.\n");
 		}else{
-			printf("Undefined algo"); exit(2);
+			printf("Error: undefined algo."); exit(2);
 		}
 	}
 
@@ -305,6 +423,7 @@ int TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity
 				computeGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta);
 			}
 		}
+
 		if (measure_accuracy){
 			computeGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta);
 			computeFftGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta,nterms,intervals_per_integer, min_num_intervals);
@@ -547,6 +666,7 @@ void TSNE::computeFftGradientOneD(double* P, unsigned int* inp_row_P, unsigned i
 
 // Compute gradient of the t-SNE cost function (using FFT)
 void TSNE::computeFftGradient(double* P, unsigned int* inp_row_P, unsigned int* inp_col_P, double* inp_val_P, double* Y, int N, int D, double* dC, double theta, int  nterms, double  intervals_per_integer, int min_num_intervals) {
+
 	//clock_t startTime;
 	//Zero out the gradient
 	for(int i = 0; i < N * D; i++){
@@ -583,7 +703,6 @@ void TSNE::computeFftGradient(double* P, unsigned int* inp_row_P, unsigned int* 
 	int nlat =fmax(min_num_intervals, (maxloc-minloc)/(double) intervals_per_integer);
 //	printf("%d nodes, from %lf to %lf, so using nlat=%d\n",nterms, minloc, maxloc, nlat);
 	int nboxes = nlat*nlat;
-
 
 	double * band = (double *) calloc(N,sizeof(double));
 	double * boxl =(double*) malloc(2*nboxes* sizeof(double));
@@ -992,43 +1111,8 @@ void TSNE::computeGaussianPerplexity(double* X, int N, int D, double* P, double 
 int TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row_P, unsigned int** _col_P, 
 		double** _val_P, double perplexity, int K, double sigma, int num_trees, int search_k, unsigned int nthreads) {
 
-	if( access( "temp/val_P.dat", F_OK ) != -1 ) {
-		printf("val_P exists, loading the file.");
-		*_row_P = (unsigned int*)    malloc((N + 1) * sizeof(unsigned int));
-		*_col_P = (unsigned int*)    calloc(N * K, sizeof(unsigned int));
-		*_val_P = (double*) calloc(N * K, sizeof(double));
-		unsigned int* row_P = *_row_P;
-		unsigned int* col_P = *_col_P;
-		double* val_P = *_val_P;
-
-		if(*_row_P == NULL || *_col_P == NULL || *_val_P == NULL) { printf("Memory allocation failed!\n"); exit(1); }
-		FILE *h;
-		if((h = fopen("temp/val_P.dat", "rb")) == NULL) {
-			printf("Error: could not open data file.\n");
-			return -2;
-		}
-
-		size_t result; // need this to get rid of warnings that otherwise appear
-		result = fread(val_P, sizeof(double), N * K, h);
-		fclose(h);
-
-		if((h = fopen("temp/col_P.dat", "rb")) == NULL) {
-			printf("Error: could not open data file.\n");
-			return -2;
-		}
-		result = fread(col_P, sizeof(unsigned int), N * K, h);
-		fclose(h);
-
-		if((h = fopen("temp/row_P.dat", "rb")) == NULL) {
-			printf("Error: could not open data file.\n");
-			return -2;
-		}
-		result = fread(row_P, sizeof(unsigned int), N +1, h);
-		fclose(h);
-		printf("dat files loaded successfully %u\n", row_P[1]);
-		return 1;
-
-
+	if( 1==0){
+		// 	TO REMOVE IN THE NEXT PULL REQUEST
 	}else{
 		//printf("K is %d, but the perplexity which we will use for beta is %lf", perplexity, K);
 		if(perplexity > K) printf("Perplexity should be lower than K!\n");
@@ -1141,29 +1225,7 @@ int TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row
 		// Clean up memory
 
 
-		/*
-		   FILE *h;
-		   if((h = fopen("temp/val_P.dat", "w+b")) == NULL) {
-		   printf("Error: could not open data file.\n");
-		   return;
-		   }
-		   fwrite(val_P, sizeof(double), N * K, h);
-		   fclose(h);
-
-		   if((h = fopen("temp/col_P.dat", "w+b")) == NULL) {
-		   printf("Error: could not open data file.\n");
-		   return;
-		   }
-		   fwrite(col_P, sizeof(unsigned int), N * K, h);
-		   fclose(h);
-
-		   if((h = fopen("temp/row_P.dat", "w+b")) == NULL) {
-		   printf("Error: could not open data file.\n");
-		   return;
-		   }
-		   fwrite(row_P, sizeof(unsigned int), N +1, h);
-		   fclose(h);
-		   */
+		
 
 	}
 	return 0;
@@ -1408,11 +1470,14 @@ double TSNE::randn() {
 
 // Function that loads data from a t-SNE file
 // Note: this function does a malloc that should be freed elsewhere
-bool TSNE::load_data(const char *data_path, double** data, double** Y, int* n, int* d, int* no_dims, double*
-		theta, double* perplexity, int* rand_seed, int* max_iter, int* stop_lying_iter,
-		int * K, double * sigma, int * nbody_algo, int * knn_algo, double *
-		early_exag_coeff, int * no_momentum_during_exag, int * n_trees, int * search_k, int * start_late_exag_iter, double * late_exag_coeff,
-		int * nterms, double * intervals_per_integer, int *min_num_intervals, bool *skip_random_init) {
+bool TSNE::load_data(const char *data_path, double **data, double **Y, int *n, 
+	int *d, int *no_dims, double *theta, double *perplexity, int *rand_seed,
+	int *max_iter, int *stop_lying_iter, int *K, double *sigma, 
+	int *nbody_algo, int *knn_algo, double *early_exag_coeff, 
+	int *no_momentum_during_exag, int *n_trees, int *search_k, 
+	int *start_late_exag_iter, double *late_exag_coeff, int *nterms, 
+	double *intervals_per_integer, int *min_num_intervals,
+	bool *skip_random_init, int *load_affinities) {
 
 	FILE *h;
 	if((h = fopen(data_path, "r+b")) == NULL) {
@@ -1422,31 +1487,36 @@ bool TSNE::load_data(const char *data_path, double** data, double** Y, int* n, i
 
 	size_t result; // need this to get rid of warnings that otherwise appear
 
-	result = fread(n, sizeof(int), 1, h);     		// number of datapoints
-	result = fread(d, sizeof(int), 1, h);	  		// original dimensionality
-	result = fread(theta, sizeof(double), 1, h);		// gradient accuracy
-	result = fread(perplexity, sizeof(double), 1, h);	// perplexity
-	result = fread(no_dims, sizeof(int), 1, h);             // output dimensionality
-	result = fread(max_iter, sizeof(int),1,h);              // maximum number of iterations
-	result = fread(stop_lying_iter, sizeof(int),1,h);         
-	result = fread(K, sizeof(int),1,h);                       
-	result = fread(sigma, sizeof(double),1,h);                
-	result = fread(nbody_algo, sizeof(int),1,h);              
-	result = fread(knn_algo, sizeof(int),1,h);                
-	result = fread(early_exag_coeff, sizeof(double),1,h);     
-	result = fread(no_momentum_during_exag, sizeof(int),1,h); 
-	result = fread(n_trees, sizeof(int),1,h);                 
-	result = fread(search_k, sizeof(int),1,h);                
-	result = fread(start_late_exag_iter, sizeof(int),1,h);    
-	result = fread(late_exag_coeff, sizeof(double),1,h);      
-	result = fread(nterms, sizeof(int),1,h);    
-	result = fread(intervals_per_integer, sizeof(double),1,h);      
-	result = fread(min_num_intervals, sizeof(int),1,h);    
+	result = fread(n, sizeof(int), 1, h);     		    // number of datapoints
+	result = fread(d, sizeof(int), 1, h);	  		    // original dimensionality
+	result = fread(theta, sizeof(double), 1, h);		    // gradient accuracy
+	result = fread(perplexity, sizeof(double), 1, h);	    // perplexity
+	result = fread(no_dims, sizeof(int), 1, h);                 // output dimensionality
+	result = fread(max_iter, sizeof(int),1,h);                  // maximum number of iterations
+	result = fread(stop_lying_iter, sizeof(int),1,h);           // when to stop early exaggeration
+	result = fread(K, sizeof(int),1,h);                         // number of neighbours to compute  
+	result = fread(sigma, sizeof(double),1,h);                  // input kernel width  
+	result = fread(nbody_algo, sizeof(int),1,h);                // Barnes-Hut or FFT  
+	result = fread(knn_algo, sizeof(int),1,h);                  // VP-trees or Annoy  
+	result = fread(early_exag_coeff, sizeof(double),1,h);       // early exaggeration  
+	result = fread(no_momentum_during_exag, sizeof(int),1,h);   // if to use momentum during early exagg
+	result = fread(n_trees, sizeof(int),1,h);                   // number of trees for Annoy
+	result = fread(search_k, sizeof(int),1,h);                  // search_k for Annoy
+	result = fread(start_late_exag_iter, sizeof(int),1,h);      // when to start late exaggeration
+	result = fread(late_exag_coeff, sizeof(double),1,h);        // late exaggeration
+	result = fread(nterms, sizeof(int),1,h);                    // FFT parameter
+	result = fread(intervals_per_integer, sizeof(double),1,h);  // FFT parameter     
+	result = fread(min_num_intervals, sizeof(int),1,h);         // FFT parameter
 
 	*data = (double*) malloc(*d * *n * sizeof(double));
 	if(*data == NULL) { printf("Memory allocation failed!\n"); exit(1); }
-	result = fread(*data, sizeof(double), *n * *d, h);                      // the data
-	if(!feof(h)) result = fread(rand_seed, sizeof(int), 1, h);              // random seed
+	result = fread(*data, sizeof(double), *n * *d, h);          // the data
+	if(!feof(h)) {
+		result = fread(rand_seed, sizeof(int), 1, h);       // random seed
+	}
+	if(!feof(h)) { 
+		result = fread(load_affinities, sizeof(int), 1, h); // to load or to save affinities
+	}
 
 	// allocating space for the t-sne solution
 	*Y = (double*) malloc(*n * *no_dims * sizeof(double));
@@ -1464,17 +1534,19 @@ bool TSNE::load_data(const char *data_path, double** data, double** Y, int* n, i
 	}
 
 	fclose(h);
-	printf("Read the following parameters:\n\t n %d by d %d dataset, theta %lf\n"
-			"\t perplexity %lf, no_dims %d, max_iter %d,  stop_lying_iter %d\n"
-			"\t K %d, sigma %lf, nbody_algo %d, knn_algo %d, compexagcoef %lf\n"
-			"\t no_momentum_during_exag %d, n_trees %d, search_k %d, start_late_exag_iter %d, late_exag_coeff %lf\n"
+	printf("Read the following parameters:\n\t n %d by d %d dataset, theta %lf,\n"
+			"\t perplexity %lf, no_dims %d, max_iter %d,  stop_lying_iter %d,\n"
+			"\t K %d, sigma %lf, nbody_algo %d, knn_algo %d, compexagcoef %lf,\n"
+			"\t no_momentum_during_exag %d, n_trees %d, search_k %d,\n"
+			"\t start_late_exag_iter %d, late_exag_coeff %lf\n"
 			"\t nterms %d, interval_per_integer %lf, min_num_intervals %d\n",  
 			*n, *d, *theta, *perplexity, 
 			*no_dims, *max_iter,*stop_lying_iter, 
 			*K, *sigma, *nbody_algo, *knn_algo, *early_exag_coeff,
-			*no_momentum_during_exag, *n_trees, *search_k, *start_late_exag_iter, *late_exag_coeff,
+			*no_momentum_during_exag, *n_trees, *search_k, 
+			*start_late_exag_iter, *late_exag_coeff,
 			*nterms, *intervals_per_integer, *min_num_intervals);
-	printf("Read the %i x %i data matrix successfully!\n", *n, *d);
+	printf("Read the %i x %i data matrix successfully.\n", *n, *d);
 
 	if(*skip_random_init){
 		printf("Read the initialization successfully.\n");
@@ -1499,20 +1571,25 @@ void TSNE::save_data(const char *result_path, double* data, int* landmarks, doub
 	fwrite(landmarks, sizeof(int), n, h);
 	fwrite(costs, sizeof(double), n, h);
 	fclose(h);
-	printf("Wrote the %i x %i data matrix successfully!\n", n, d);
+	printf("Wrote the %i x %i data matrix successfully.\n", n, d);
 }
 
 
 // Function that runs the Barnes-Hut implementation of t-SNE
 int main(int argc, char *argv[]) {
 
+	printf("=============== t-SNE ===============\n");
+
 	// Define some variables
-	int origN, N, D, no_dims, max_iter, stop_lying_iter,  K, nbody_algo, knn_algo, no_momentum_during_exag,n_trees,search_k, start_late_exag_iter;
-	double   sigma, early_exag_coeff, late_exag_coeff;
+	int origN, N, D, no_dims, max_iter, stop_lying_iter;
+	int K, nbody_algo, knn_algo, no_momentum_during_exag;
+	int n_trees, search_k, start_late_exag_iter;
+	double sigma, early_exag_coeff, late_exag_coeff;
 	double perplexity, theta, *data, *initial_data;
 	int nterms, min_num_intervals;
 	double intervals_per_integer;
-	int rand_seed;
+	int rand_seed = 0;
+	int load_affinities = 0;
 	const char *data_path, *result_path;
 	unsigned int nthreads;
 	TSNE* tsne = new TSNE();
@@ -1542,8 +1619,8 @@ int main(int argc, char *argv[]) {
 				&sigma, &nbody_algo, &knn_algo,
 				&early_exag_coeff, &no_momentum_during_exag,
 				&n_trees, &search_k, &start_late_exag_iter,
-				&late_exag_coeff,
-				&nterms, &intervals_per_integer, &min_num_intervals, &skip_random_init)) {
+				&late_exag_coeff, &nterms, &intervals_per_integer,
+				&min_num_intervals, &skip_random_init, &load_affinities)) {
 
 		bool no_momentum_during_exag_bool = true;
 		if (no_momentum_during_exag == 0) no_momentum_during_exag_bool = false;
@@ -1559,10 +1636,10 @@ int main(int argc, char *argv[]) {
 		double initialError;
 		int error_code = 0;
 		error_code = tsne->run(data, N, D, Y, no_dims, perplexity, theta, rand_seed, skip_random_init, max_iter, 
-				stop_lying_iter,250, K, sigma, nbody_algo, knn_algo, early_exag_coeff, &initialError, 
+				stop_lying_iter, 250, K, sigma, nbody_algo, knn_algo, early_exag_coeff, &initialError, 
 				costs, no_momentum_during_exag_bool, start_late_exag_iter, late_exag_coeff, n_trees,search_k, 
-				nterms, intervals_per_integer, min_num_intervals, nthreads);
-		if (error_code <0 ) {
+				nterms, intervals_per_integer, min_num_intervals, nthreads, load_affinities);
+		if (error_code < 0) {
 			exit(error_code);
 		}
 
@@ -1576,4 +1653,6 @@ int main(int argc, char *argv[]) {
 		free(landmarks); landmarks = NULL;
 	}
 	delete(tsne);
+
+	printf("Done.\n\n");
 }
