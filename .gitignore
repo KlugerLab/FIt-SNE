@@ -4,3 +4,10 @@ temp/*
 *.dat
 .DS_Store
 *.sw*
+.idea/
+*.cmake
+CMakeCache.txt
+*.cbp
+CMakeFiles/
+cmake-build-debug/
+Makefile
