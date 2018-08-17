@@ -113,9 +113,6 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
         theta = opts.theta;
     end
     
-    if (~isfield(opts, 'use_existing_P'))
-        delete temp/*.dat
-    end
     if (~isfield(opts, 'stop_lying_iter'))
         stop_lying_iter = 200;
     else
