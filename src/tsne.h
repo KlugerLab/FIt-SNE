@@ -41,22 +41,26 @@ static inline double sign(double x) { return (x == .0 ? .0 : (x < .0 ? -1.0 : 1.
 class TSNE
 {
 public:
-    int run(double* X, int N, int D, double* Y, int no_dims, double perplexity, double theta, int rand_seed,
-        bool skip_random_init, int max_iter, int stop_lying_iter, int mom_switch_iter, int K, double sigma, 
-        int nbody_algo, int knn_algo, double early_exag_coeff,double * initialError, double* costs, bool no_momentum_during_exag,
-		int start_late_exag_iter, double late_exag_coeff, int n_trees,int search_k,int nterms, double intervals_per_integer, 
-        int min_num_intervals, unsigned int nthreads);
+    int run(double *X, int N, int D, double *Y, int no_dims, double perplexity, double theta,
+        int rand_seed, bool skip_random_init, int max_iter, int stop_lying_iter, 
+        int mom_switch_iter, int K, double sigma, int nbody_algo, int knn_algo, 
+        double early_exag_coeff, double *initialError, double *costs,
+        bool no_momentum_during_exag, int start_late_exag_iter, double late_exag_coeff,
+        int n_trees, int search_k, int nterms, double intervals_per_integer, 
+        int min_num_intervals, unsigned int nthreads, int load_affinities	);
 
-    bool load_data(const char *data_path, double** data, double** Y, int* n, int* d, int* no_dims, double* theta,
-		    double* perplexity, int* rand_seed, int* max_iter, int*
-		    stop_lying_iter, int* K, double * sigma, int* nbody_algo,
-		    int* compexag, double* early_exag_coeff,  int *
-		    no_momentum_during_exag, int * n_trees, int * search_k,
-		    int* start_late_exag_iter, double *late_exag_coeff,
-	       	    int * nterms, double * intervals_per_integer, int *min_num_intervals, bool *skip_random_init);
+    bool load_data(const char *data_path, double **data, double **Y, int *n, int *d,
+        int *no_dims, double *theta, double *perplexity, int *rand_seed, int *max_iter,
+        int *stop_lying_iter, int *K, double *sigma, int *nbody_algo, int *knn_algo,
+	double* early_exag_coeff,  int *no_momentum_during_exag, int *n_trees, int *search_k,
+        int *start_late_exag_iter, double *late_exag_coeff, int *nterms,
+        double *intervals_per_integer, int *min_num_intervals, bool *skip_random_init,
+        int *load_affinities);
 
-    void save_data(const char *result_path, double* data, int* landmarks, double* costs, int n, int d, double initialError);
-    void symmetrizeMatrix(unsigned int** row_P, unsigned int** col_P, double** val_P, int N); // should be static!
+    void save_data(const char *result_path, double* data, int *landmarks, double *costs,
+        int n, int d, double initialError);
+
+    void symmetrizeMatrix(unsigned int **row_P, unsigned int **col_P, double **val_P, int N); // should be static!
 
 
 private:

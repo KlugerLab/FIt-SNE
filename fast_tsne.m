@@ -56,7 +56,10 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
 %
 %                   opts.initialization - N x no_dims array to intialize the solution
 %                        Default: None
-
+%
+%		    opts.load_affinities - can be 'load', 'save', or 'none' (default)
+%			 If 'save', input similarities are saved into a file.
+%                        If 'load', input similarities are loaded from a file and not computed
 
 
 % Runs the C++ implementation of fast t-SNE using either the IFt-SNE
@@ -110,9 +113,6 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
         theta = opts.theta;
     end
     
-    if (~isfield(opts, 'use_existing_P'))
-        delete temp/*.dat
-    end
     if (~isfield(opts, 'stop_lying_iter'))
         stop_lying_iter = 200;
     else
@@ -221,6 +221,18 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
     else
         initialization = double(opts.initialization);
     end
+
+    if (~isfield(opts, 'load_affinities'))
+        load_affinities = 0;
+    else
+	if opts.load_affinities == 'load'
+            load_affinities = 1;
+        elseif opts.load_affinities == 'save'
+            load_affinities = 2;
+	else
+            load_affinities = 0;
+	end
+    end
     
     X = double(X);
     
@@ -232,10 +244,10 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
     end
 
     % Run the fast diffusion SNE implementation
-    write_data('temp/data.dat',X, no_dims, theta, perplexity, max_iter, ...
-        stop_lying_iter, K, sigma, nbody_algo,no_momentum_during_exag, knn_algo,...
-        early_exag_coeff,n_trees, search_k,start_late_exag_iter, late_exag_coeff,rand_seed,...
-        nterms,intervals_per_integer,min_num_intervals,initialization);
+    write_data('temp/data.dat', X, no_dims, theta, perplexity, max_iter, ...
+        stop_lying_iter, K, sigma, nbody_algo, no_momentum_during_exag, knn_algo,...
+        early_exag_coeff, n_trees, search_k, start_late_exag_iter, late_exag_coeff, rand_seed,...
+        nterms, intervals_per_integer, min_num_intervals, initialization, load_affinities);
 
     disp('Data written');
     tic
@@ -252,9 +264,9 @@ end
 
 % Writes the datafile for the fast t-SNE implementation
 function write_data(filename, X, no_dims, theta, perplexity, max_iter,...
-    stop_lying_iter,K, sigma, nbody_algo,no_momentum_during_exag, knn_algo,...
-    early_exag_coeff,n_trees, search_k,start_late_exag_iter, late_exag_coeff,rand_seed,...
-    nterms,intervals_per_integer,min_num_intervals,initialization)
+    stop_lying_iter, K, sigma, nbody_algo, no_momentum_during_exag, knn_algo,...
+    early_exag_coeff, n_trees, search_k, start_late_exag_iter, late_exag_coeff, rand_seed,...
+    nterms, intervals_per_integer, min_num_intervals, initialization, load_affinities)
 
     [n, d] = size(X);
 
@@ -281,6 +293,7 @@ function write_data(filename, X, no_dims, theta, perplexity, max_iter,...
     fwrite(h, min_num_intervals, 'int');
     fwrite(h, X', 'double');
     fwrite(h, rand_seed, 'integer*4');
+    fwrite(h, load_affinities, 'integer*4');
     if ~isnan(initialization)
 	fwrite(h, initialization', 'double');
     end
