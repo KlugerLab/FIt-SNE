@@ -840,9 +840,6 @@ void TSNE::computeExactGradient(double *P, double *Y, int N, int D, double *dC) 
     nN = 0;
     int nD = 0;
     for (int n = 0; n < N; n++) {
-        double testQij = 0;
-        double testPos = 0;
-        double testNeg = 0;
         int mD = 0;
         for (int m = 0; m < N; m++) {
             if (n != m) {
@@ -850,9 +847,6 @@ void TSNE::computeExactGradient(double *P, double *Y, int N, int D, double *dC) 
                 for (int d = 0; d < D; d++) {
                     dC[nD + d] += (Y[nD + d] - Y[mD + d]) * mult;
                 }
-                testQij += Q[nN + m] * Q[nN + m] * (Y[nD] - Y[mD]);
-                testPos += P[nN + m] * Q[nN + m] * (Y[nD + 0] - Y[mD + 0]);
-                testNeg += Q[nN + m] * Q[nN + m] * (Y[nD + 0] - Y[mD + 0]) / sum_Q;
             }
             mD += D;
         }
@@ -860,6 +854,7 @@ void TSNE::computeExactGradient(double *P, double *Y, int N, int D, double *dC) 
         nD += D;
     }
     free(Q);
+    free(DD);
 }
 
 
