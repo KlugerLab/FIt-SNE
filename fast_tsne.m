@@ -57,9 +57,12 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
 %                   opts.initialization - N x no_dims array to intialize the solution
 %                        Default: None
 %
-%		    opts.load_affinities - can be 'load', 'save', or 'none' (default)
-%			 If 'save', input similarities are saved into a file.
+%                   opts.load_affinities - can be 'load', 'save', or 'none' (default)
+%                        If 'save', input similarities are saved into a file.
 %                        If 'load', input similarities are loaded from a file and not computed
+%
+%                   opts.perplexity_list - if perplexity==0 then perplexity combination will
+%                        be used with values taken from perplexity_list. Default: []
 
 
 % Runs the C++ implementation of fast t-SNE using either the IFt-SNE
@@ -188,12 +191,15 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
     else
         n_trees = opts.n_trees;
     end
+
     if (~isfield(opts, 'search_k'))
-	if perplexity > 0
-	        search_k = 3*perplexity*n_trees;
-	else
-		search_k = 3*K*n_trees;
-	end
+        if perplexity > 0
+            search_k = 3*perplexity*n_trees;
+        elseif perplexity == 0
+            search_k = 3 * max(opts.perplexity_list) * n_trees;
+        else
+		    search_k = 3*K*n_trees;
+    	end
     else
         search_k = opts.search_k;
     end
@@ -221,17 +227,23 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
     else
         initialization = double(opts.initialization);
     end
+    
+    if (~isfield(opts, 'perplexity_list'))
+        perplexity_list = [];
+    else
+        perplexity_list = double(opts.perplexity_list);
+    end
 
     if (~isfield(opts, 'load_affinities'))
         load_affinities = 0;
     else
-	if opts.load_affinities == 'load'
+	    if opts.load_affinities == 'load'
             load_affinities = 1;
         elseif opts.load_affinities == 'save'
             load_affinities = 2;
-	else
+	    else
             load_affinities = 0;
-	end
+        end
     end
     
     X = double(X);
@@ -247,7 +259,8 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
     write_data('temp/data.dat', X, no_dims, theta, perplexity, max_iter, ...
         stop_lying_iter, K, sigma, nbody_algo, no_momentum_during_exag, knn_algo,...
         early_exag_coeff, n_trees, search_k, start_late_exag_iter, late_exag_coeff, rand_seed,...
-        nterms, intervals_per_integer, min_num_intervals, initialization, load_affinities);
+        nterms, intervals_per_integer, min_num_intervals, initialization, load_affinities, ...
+        perplexity_list);
 
     disp('Data written');
     tic
@@ -266,7 +279,8 @@ end
 function write_data(filename, X, no_dims, theta, perplexity, max_iter,...
     stop_lying_iter, K, sigma, nbody_algo, no_momentum_during_exag, knn_algo,...
     early_exag_coeff, n_trees, search_k, start_late_exag_iter, late_exag_coeff, rand_seed,...
-    nterms, intervals_per_integer, min_num_intervals, initialization, load_affinities)
+    nterms, intervals_per_integer, min_num_intervals, initialization, load_affinities, ...
+    perplexity_list)
 
     [n, d] = size(X);
 
@@ -275,6 +289,10 @@ function write_data(filename, X, no_dims, theta, perplexity, max_iter,...
     fwrite(h, d, 'integer*4');
     fwrite(h, theta, 'double');
     fwrite(h, perplexity, 'double');
+    if perplexity == 0
+        fwrite(h, length(perplexity_list), 'integer*4');
+        fwrite(h, perplexity_list, 'double');
+    end
     fwrite(h, no_dims, 'integer*4');
     fwrite(h, max_iter, 'integer*4');
     fwrite(h, stop_lying_iter, 'integer*4');
@@ -295,7 +313,7 @@ function write_data(filename, X, no_dims, theta, perplexity, max_iter,...
     fwrite(h, rand_seed, 'integer*4');
     fwrite(h, load_affinities, 'integer*4');
     if ~isnan(initialization)
-	fwrite(h, initialization', 'double');
+	    fwrite(h, initialization', 'double');
     end
     fclose(h);
 end
