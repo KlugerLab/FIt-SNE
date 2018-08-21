@@ -43,13 +43,15 @@ public:
             bool skip_random_init, int max_iter, int stop_lying_iter, int mom_switch_iter, int K, double sigma,
             int nbody_algorithm, int knn_algo, double early_exag_coeff, double *initialError, double *costs,
             bool no_momentum_during_exag, int start_late_exag_iter, double late_exag_coeff, int n_trees, int search_k,
-            int nterms, double intervals_per_integer, int min_num_intervals, unsigned int nthreads, int load_affinities);
+            int nterms, double intervals_per_integer, int min_num_intervals, unsigned int nthreads, int load_affinities,
+            int perplexity_list_length, double *perplexity_list);
 
     bool load_data(const char *data_path, double **data, double **Y, int *n, int *d, int *no_dims, double *theta,
             double *perplexity, int *rand_seed, int *max_iter, int *stop_lying_iter, int *K, double *sigma,
             int *nbody_algo, int *knn_algo, double* early_exag_coeff,  int *no_momentum_during_exag, int *n_trees,
             int *search_k, int *start_late_exag_iter, double *late_exag_coeff, int *nterms,
-            double *intervals_per_integer, int *min_num_intervals, bool *skip_random_init, int *load_affinities);
+            double *intervals_per_integer, int *min_num_intervals, bool *skip_random_init, int *load_affinities,
+            int *perplexity_list_length, double **perplexity_list);
 
 
     //bool load_initial_data(double** data);
@@ -83,14 +85,19 @@ private:
 
 	double distances2similarities(double *D, double *P, int N, int n, double perplexity, double sigma, bool ifSquared);
 
-    void computeGaussianPerplexity(double *X, int N, int D, double *P, double perplexity, double sigma);
+	double distances2similarities(double *D, double *P, int N, int n, double perplexity, double sigma, bool ifSquared,
+                                  int perplexity_list_length, double *perplexity_list);
+
+    void computeGaussianPerplexity(double *X, int N, int D, double *P, double perplexity, double sigma,
+                                   int perplexity_list_length, double *perplexity_list);
 
     void computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row_P, unsigned int **_col_P,
-                                   double **_val_P, double perplexity, int K, double sigma, unsigned int nthreads);
+                                   double **_val_P, double perplexity, int K, double sigma, unsigned int nthreads,
+                                   int perplexity_list_length, double *perplexity_list);
 
     int computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row_P, unsigned int **_col_P,
                                   double **_val_P, double perplexity, int K, double sigma, int num_trees, int search_k,
-                                  unsigned int nthreads);
+                                  unsigned int nthreads, int perplexity_list_length, double *perplexity_list);
 
     void computeSquaredEuclideanDistance(double *X, int N, int D, double *DD);
 

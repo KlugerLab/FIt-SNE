@@ -94,7 +94,9 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
               bool skip_random_init, int max_iter, int stop_lying_iter, int mom_switch_iter, int K, double sigma,
               int nbody_algorithm, int knn_algo, double early_exag_coeff, double *initialError, double *costs,
               bool no_momentum_during_exag, int start_late_exag_iter, double late_exag_coeff, int n_trees, int search_k,
-              int nterms, double intervals_per_integer, int min_num_intervals, unsigned int nthreads, int load_affinities) {
+              int nterms, double intervals_per_integer, int min_num_intervals, unsigned int nthreads, 
+              int load_affinities, int perplexity_list_length, double *perplexity_list) {
+
     // Set random seed
     if (skip_random_init != true) {
         if (rand_seed >= 0) {
@@ -117,8 +119,10 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
     } else {
         printf("Will use momentum during exaggeration phase\n");
     }
-    printf("Using no_dims = %d, max_iter = %d, perplexity = %f, theta = %f, K = %d, Sigma = %lf, knn_algo = %d, "
-           "early_exag_coeff = %f, data[0] = %lf\n", no_dims, max_iter, perplexity, theta, K, sigma, knn_algo,
+    printf("Using no_dims = %d, max_iter = %d, perplexity = %f, theta = %f,\n"
+           "      K = %d, Sigma = %lf, knn_algo = %d, early_exag_coeff = %f,\n"
+           "      data[0] = %lf\n",
+           no_dims, max_iter, perplexity, theta, K, sigma, knn_algo,
            early_exag_coeff, X[0]);
 
     // Determine whether we are using an exact algorithm
@@ -145,7 +149,7 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
     printf("Computing input similarities...\n");
     zeroMean(X, N, D);
 
-    if (perplexity > 0) {
+    if (perplexity > 0 || perplexity_list_length > 0) {
         printf("Using perplexity, so normalizing input data (to prevent numerical problems)\n");
         double max_X = .0;
         for (int i = 0; i < N * D; i++) {
@@ -190,7 +194,7 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
 				exit(1);
 			}
 
-			computeGaussianPerplexity(X, N, D, P, perplexity, sigma);
+			computeGaussianPerplexity(X, N, D, P, perplexity, sigma, perplexity_list_length, perplexity_list);
 
 			// Symmetrize input similarities
 			printf("Symmetrizing...\n");
@@ -283,7 +287,16 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
 				sigma_to_use = sigma;
 			} else {
 				printf("Using perplexity, not the manually set kernel width.  K (number of nearest neighbors) and sigma (bandwidth) parameters are going to be ignored.\n");
-				K_to_use = (int) 3 * perplexity;
+				if (perplexity > 0) {
+                    K_to_use = (int) 3 * perplexity;
+                } else {
+                    K_to_use = (int) 3 * perplexity_list[0];
+                    for (int pp = 1; pp < perplexity_list_length; pp++) {
+                        if ((int) 3* perplexity_list[pp] > K_to_use) {
+                            K_to_use = (int) 3 * perplexity_list[pp];
+						}
+                    }
+                }                         
 				sigma_to_use = -1;
 			}
 
@@ -291,12 +304,13 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
 				printf("Using ANNOY for knn search, with parameters: n_trees %d and search_k %d\n", n_trees, search_k);
 				int error_code = 0;
 				error_code = computeGaussianPerplexity(X, N, D, &row_P, &col_P, &val_P, perplexity, K_to_use,
-													   sigma_to_use, n_trees, search_k, nthreads);
+													   sigma_to_use, n_trees, search_k, nthreads,
+                                                       perplexity_list_length, perplexity_list);
 				if (error_code < 0) return error_code;
 			} else if (knn_algo == 2) {
 				printf("Using VP trees for nearest neighbor search\n");
 				computeGaussianPerplexity(X, N, D, &row_P, &col_P, &val_P, perplexity, K_to_use, sigma_to_use,
-										  nthreads);
+										  nthreads, perplexity_list_length, perplexity_list);
 			} else {
 				printf("Invalid knn_algo param\n");
 				free(dY);
@@ -1008,8 +1022,40 @@ double TSNE::distances2similarities(double *D, double *P, int N, int n, double p
 }
 
 
+// Converts an array of [squared] Euclidean distances into similarities aka affinities
+// using a list of perplexities
+double TSNE::distances2similarities(double *D, double *P, int N, int n, double perplexity, double sigma, bool ifSquared, 
+                                    int perplexity_list_length, double *perplexity_list)  {
+
+    // if perplexity > 0 then defaulting to using this perplexity
+    if (perplexity > 0) {
+        double beta = distances2similarities(D, P, N, n, perplexity, sigma, true);
+        return beta;
+    }
+
+    // otherwise averaging similarities using all perplexities in perplexity_list
+	double *tmp = (double*) malloc(N * sizeof(double));
+	if(tmp == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+	double beta = distances2similarities(D, P, N, n, perplexity_list[0], sigma, true);
+
+	for (int m=1; m < perplexity_list_length; m++){
+		beta = distances2similarities(D, tmp, N, n, perplexity_list[m], sigma, true);
+		for (int i=0; i<N; i++){
+			P[i] += tmp[i];
+		}
+	}
+
+	for (int i=0; i<N; i++){
+		P[i] /= perplexity_list_length;
+	}
+
+	return beta;
+}
+
+
 // Compute input similarities using exact algorithm
-void TSNE::computeGaussianPerplexity(double *X, int N, int D, double *P, double perplexity, double sigma) {
+void TSNE::computeGaussianPerplexity(double *X, int N, int D, double *P, double perplexity, double sigma,
+                                     int perplexity_list_length, double *perplexity_list) {
     if (perplexity < 0) {
         printf("Using manually set kernel width\n");
     } else {
@@ -1028,7 +1074,8 @@ void TSNE::computeGaussianPerplexity(double *X, int N, int D, double *P, double 
     int nN = 0;
     double beta;
     for (int n = 0; n < N; n++) {
-        beta = distances2similarities(&DD[nN], &P[nN], N, n, perplexity, sigma, true);
+        beta = distances2similarities(&DD[nN], &P[nN], N, n, perplexity, sigma, true, 
+                                      perplexity_list_length, perplexity_list);
         nN += N;
     }
 
@@ -1040,7 +1087,9 @@ void TSNE::computeGaussianPerplexity(double *X, int N, int D, double *P, double 
 // Compute input similarities using ANNOY
 int TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row_P, unsigned int **_col_P,
                                     double **_val_P, double perplexity, int K, double sigma, int num_trees, 
-                                    int search_k, unsigned int nthreads) {
+                                    int search_k, unsigned int nthreads, int perplexity_list_length, 
+                                    double *perplexity_list) {
+
     if(perplexity > K) printf("Perplexity should be lower than K!\n");
 
     // Allocate the memory we need
@@ -1105,9 +1154,10 @@ int TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row
                                 double* cur_P = (double*) malloc((N - 1) * sizeof(double));
                                 if(cur_P == NULL) { printf("Memory allocation failed!\n"); exit(1); }
 
-                                double beta = distances2similarities(&closest_distances[1], cur_P, K, -1, perplexity, sigma, false);
+                                double beta = distances2similarities(&closest_distances[1], cur_P, K, -1, perplexity, sigma, false,
+                                                                     perplexity_list_length, perplexity_list);
                                 if(n % 10000 == 0) {
-                                    if (perplexity > 0) {
+                                    if (perplexity >= 0) {
                                         printf(" - point %d of %d, most recent beta calculated is %lf \n", n, N, beta);
                                     } else {
                                         printf(" - point %d of %d, beta is set to %lf \n", n, N, 1/sigma);
@@ -1137,7 +1187,8 @@ int TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row
 
 // Compute input similarities with a fixed perplexity using ball trees (this function allocates memory another function should free)
 void TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row_P, unsigned int **_col_P, 
-                                     double **_val_P, double perplexity, int K, double sigma, unsigned int nthreads) {
+                                     double **_val_P, double perplexity, int K, double sigma, unsigned int nthreads,
+                                     int perplexity_list_length, double *perplexity_list) {
 
     if(perplexity > K) printf("Perplexity should be lower than K!\n");
 
@@ -1184,9 +1235,10 @@ void TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_ro
                                 vector<double> distances;
                                 tree->search(obj_X[n], K + 1, &indices, &distances);
 
-                                double beta = distances2similarities(&distances[1], &cur_P[0], K, -1, perplexity, sigma, false);
+                                double beta = distances2similarities(&distances[1], &cur_P[0], K, -1, perplexity, sigma, false,
+                                                                     perplexity_list_length, perplexity_list);
                                 if(n % 10000 == 0) {
-                                    if (perplexity > 0) {
+                                    if (perplexity >= 0) {
                                         printf(" - point %d of %d, most recent beta calculated is %lf \n", n, N, beta);
                                     } else {
                                         printf(" - point %d of %d, beta is set to %lf \n", n, N, 1/sigma);
@@ -1389,7 +1441,8 @@ bool TSNE::load_data(const char *data_path, double **data, double **Y, int *n,
 	int *no_momentum_during_exag, int *n_trees, int *search_k,
 	int *start_late_exag_iter, double *late_exag_coeff, int *nterms,
 	double *intervals_per_integer, int *min_num_intervals,
-	bool *skip_random_init, int *load_affinities) {
+	bool *skip_random_init, int *load_affinities,
+    int *perplexity_list_length, double **perplexity_list) {
 
 	FILE *h;
 	if((h = fopen(data_path, "r+b")) == NULL) {
@@ -1403,6 +1456,19 @@ bool TSNE::load_data(const char *data_path, double **data, double **Y, int *n,
 	result = fread(d, sizeof(int), 1, h);	  		            // original dimensionality
 	result = fread(theta, sizeof(double), 1, h);		        // gradient accuracy
 	result = fread(perplexity, sizeof(double), 1, h);	        // perplexity
+
+    // if perplexity == 0, then what follows is the number of perplexities 
+    // to combine and then the list of these perpexities
+    if (*perplexity == 0) {
+        result = fread(perplexity_list_length, sizeof(int), 1, h);
+        *perplexity_list = (double*) malloc(*perplexity_list_length * sizeof(double));
+        if(*perplexity_list == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+        result = fread(*perplexity_list, sizeof(double), *perplexity_list_length, h);                      
+    } else {
+        perplexity_list_length = 0;
+        perplexity_list = NULL;
+    }
+
 	result = fread(no_dims, sizeof(int), 1, h);                 // output dimensionality
 	result = fread(max_iter, sizeof(int),1,h);                  // maximum number of iterations
 	result = fread(stop_lying_iter, sizeof(int),1,h);           // when to stop early exaggeration
@@ -1448,7 +1514,7 @@ bool TSNE::load_data(const char *data_path, double **data, double **Y, int *n,
 	fclose(h);
 	printf("Read the following parameters:\n\t n %d by d %d dataset, theta %lf,\n"
 			"\t perplexity %lf, no_dims %d, max_iter %d,  stop_lying_iter %d,\n"
-			"\t K %d, sigma %lf, nbody_algo %d, knn_algo %d, compexagcoef %lf,\n"
+			"\t K %d, sigma %lf, nbody_algo %d, knn_algo %d, early_exag_coeff %lf,\n"
 			"\t no_momentum_during_exag %d, n_trees %d, search_k %d,\n"
 			"\t start_late_exag_iter %d, late_exag_coeff %lf\n"
 			"\t nterms %d, interval_per_integer %lf, min_num_intervals %d\n",
@@ -1459,6 +1525,14 @@ bool TSNE::load_data(const char *data_path, double **data, double **Y, int *n,
 			*start_late_exag_iter, *late_exag_coeff,
 			*nterms, *intervals_per_integer, *min_num_intervals);
 	printf("Read the %i x %i data matrix successfully.\n", *n, *d);
+
+    if(*perplexity == 0){
+        printf("Read the list of perplexities: ");
+        for (int m=0; m<*perplexity_list_length; m++){
+            printf("%f ", (*perplexity_list)[m]);
+        }
+        printf("\n");
+    }
 
 	if(*skip_random_init){
 		printf("Read the initialization successfully.\n");
@@ -1507,6 +1581,9 @@ int main(int argc, char *argv[]) {
 	double *Y;
 	bool skip_random_init;
 
+    double *perplexity_list;
+    int perplexity_list_length;
+
 	data_path = "temp/data.dat";
 	result_path = "temp/result.dat";
 	nthreads = 0;
@@ -1530,7 +1607,8 @@ int main(int argc, char *argv[]) {
 				&early_exag_coeff, &no_momentum_during_exag,
 				&n_trees, &search_k, &start_late_exag_iter,
 				&late_exag_coeff, &nterms, &intervals_per_integer,
-				&min_num_intervals, &skip_random_init, &load_affinities)) {
+				&min_num_intervals, &skip_random_init, &load_affinities,
+                &perplexity_list_length, &perplexity_list)) {
 
 		bool no_momentum_during_exag_bool = true;
 		if (no_momentum_during_exag == 0) no_momentum_during_exag_bool = false;
@@ -1548,7 +1626,8 @@ int main(int argc, char *argv[]) {
 		error_code = tsne->run(data, N, D, Y, no_dims, perplexity, theta, rand_seed, skip_random_init, max_iter, 
 				stop_lying_iter, 250, K, sigma, nbody_algo, knn_algo, early_exag_coeff, &initialError, 
 				costs, no_momentum_during_exag_bool, start_late_exag_iter, late_exag_coeff, n_trees,search_k, 
-				nterms, intervals_per_integer, min_num_intervals, nthreads, load_affinities);
+				nterms, intervals_per_integer, min_num_intervals, nthreads, load_affinities,
+                perplexity_list_length, perplexity_list);
 		if (error_code < 0) {
 			exit(error_code);
 		}
