@@ -840,9 +840,6 @@ void TSNE::computeExactGradient(double *P, double *Y, int N, int D, double *dC) 
     nN = 0;
     int nD = 0;
     for (int n = 0; n < N; n++) {
-        double testQij = 0;
-        double testPos = 0;
-        double testNeg = 0;
         int mD = 0;
         for (int m = 0; m < N; m++) {
             if (n != m) {
@@ -850,9 +847,6 @@ void TSNE::computeExactGradient(double *P, double *Y, int N, int D, double *dC) 
                 for (int d = 0; d < D; d++) {
                     dC[nD + d] += (Y[nD + d] - Y[mD + d]) * mult;
                 }
-                testQij += Q[nN + m] * Q[nN + m] * (Y[nD] - Y[mD]);
-                testPos += P[nN + m] * Q[nN + m] * (Y[nD + 0] - Y[mD + 0]);
-                testNeg += Q[nN + m] * Q[nN + m] * (Y[nD + 0] - Y[mD + 0]) / sum_Q;
             }
             mD += D;
         }
@@ -860,6 +854,7 @@ void TSNE::computeExactGradient(double *P, double *Y, int N, int D, double *dC) 
         nD += D;
     }
     free(Q);
+    free(DD);
 }
 
 
@@ -1043,130 +1038,13 @@ void TSNE::computeGaussianPerplexity(double *X, int N, int D, double *P, double 
 
 
 // Compute input similarities using ANNOY
-int TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row_P, unsigned int** _col_P,
-                                    double** _val_P, double perplexity, int K, double sigma, int num_trees, int search_k, unsigned int nthreads) {
-    if(1 == 0) {
-		// 	TO REMOVE IN THE NEXT PULL REQUEST
-    }else{
-        //printf("K is %d, but the perplexity which we will use for beta is %lf", perplexity, K);
-        if(perplexity > K) printf("Perplexity should be lower than K!\n");
-
-        // Allocate the memory we need
-        *_row_P = (unsigned int*)    malloc((N + 1) * sizeof(unsigned int));
-        *_col_P = (unsigned int*)    calloc(N * K, sizeof(unsigned int));
-        printf("Going to allocate N: %d, K: %d, N*K = %d\n", N, K, N*K);
-        *_val_P = (double*) calloc(N * K, sizeof(double));
-        if(*_row_P == NULL || *_col_P == NULL || *_val_P == NULL) { printf("Memory allocation failed!\n"); exit(1); }
-        unsigned int* row_P = *_row_P;
-        unsigned int* col_P = *_col_P;
-        double* val_P = *_val_P;
-        row_P[0] = 0;
-        for(int n = 0; n < N; n++) row_P[n + 1] = row_P[n] + (unsigned int) K;
-
-        printf("Building Annoy tree...\n");
-        //Begin annoy
-
-
-        AnnoyIndex<int, double, Euclidean, Kiss32Random> tree = AnnoyIndex<int, double, Euclidean, Kiss32Random>(D);
-
-        for(int i=0; i<N; ++i){
-            double *vec = (double *) malloc( D * sizeof(double) );
-
-            for(int z=0; z<D; ++z){
-                vec[z] = X[i*D+z];
-            }
-
-            tree.add_item(i, vec);
-        }
-        tree.build(num_trees);
-
-
-        //End annoy
-        printf("Done building Annoy tree. Begin nearest neighbor search... \n");
-
-        if (perplexity >0 ) {
-            printf("Calculating dynamic kernels using perplexity \n");
-        }else {
-            printf("Using sigma = %lf\n", sigma);
-        }
-        //Check if it returns enough neighbors
-        std::vector<int> closest;
-        std::vector<double> closest_distances;
-        for (int n = 0; n < 100; n++){
-            tree.get_nns_by_item(n, K+1, search_k, &closest, &closest_distances);
-            unsigned int neighbors_count = closest.size();
-            if (neighbors_count < K+1 ) {
-                printf("Requesting perplexity*3=%d neighbors, but ANNOY is only giving us %u. Please increase search_k\n", K, neighbors_count);
-                return -1;
-            }
-        }
-
-        if (nthreads == 0) {
-            nthreads = std::thread::hardware_concurrency();
-        }
-        //const size_t nthreads = 1;
-        {
-            // Pre loop
-            std::cout << "parallel (" << nthreads << " threads):" << std::endl;
-            std::vector<std::thread> threads(nthreads);
-            for (int t = 0; t < nthreads; t++) {
-                threads[t] = std::thread(std::bind(
-                        [&](const int bi, const int ei, const int t)
-                        {
-                            // loop over all items
-                            for(int n = bi;n<ei;n++)
-                            {
-                                // inner loop
-                                {
-                                    //if(n % 10000 == 0) printf(" - point %d of %d\n", n, N);
-
-                                    // Find nearest neighbors
-                                    std::vector<int> closest;
-                                    std::vector<double> closest_distances;
-                                    tree.get_nns_by_item(n, K+1, search_k, &closest, &closest_distances);
-
-                                    double* cur_P = (double*) malloc((N - 1) * sizeof(double));
-                                    if(cur_P == NULL) { printf("Memory allocation failed!\n"); exit(1); }
-
-                                    double beta = distances2similarities(&closest_distances[1], cur_P, K, -1, perplexity, sigma, false);
-                                    if(n % 10000 == 0) {
-                                        if (perplexity > 0) {
-                                            printf(" - point %d of %d, most recent beta calculated is %lf \n", n, N, beta);
-                                        } else {
-                                            printf(" - point %d of %d, beta is set to %lf \n", n, N, 1/sigma);
-                                        }
-                                    }
-
-                                    // Store current row of P in matrix
-                                    for(unsigned int m = 0; m < K; m++) {
-                                        col_P[row_P[n] + m] = (unsigned int) closest[m + 1];
-                                        val_P[row_P[n] + m] = cur_P[m];
-                                    }
-
-                                    free(cur_P);
-                                    closest.clear();
-                                    closest_distances.clear();
-                                }
-                            }
-                        },t*N/nthreads,(t+1)==nthreads?N:(t+1)*N/nthreads,t));
-            }
-            std::for_each(threads.begin(),threads.end(),[](std::thread& x){x.join();});
-            // Post loop
-        }
-
-        // Clean up memory
-    }
-    return 0;
-}
-
-
-// Compute input similarities with a fixed perplexity using ball trees (this function allocates memory another function should free)
-void TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _row_P, unsigned int** _col_P, double** _val_P, double perplexity, int K, double sigma, unsigned int nthreads) {
-
-
+int TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row_P, unsigned int **_col_P,
+                                    double **_val_P, double perplexity, int K, double sigma, int num_trees, 
+                                    int search_k, unsigned int nthreads) {
     if(perplexity > K) printf("Perplexity should be lower than K!\n");
 
     // Allocate the memory we need
+    printf("Going to allocate memory. N: %d, K: %d, N*K = %d\n", N, K, N*K);
     *_row_P = (unsigned int*)    malloc((N + 1) * sizeof(unsigned int));
     *_col_P = (unsigned int*)    calloc(N * K, sizeof(unsigned int));
     *_val_P = (double*) calloc(N * K, sizeof(double));
@@ -1177,14 +1055,30 @@ void TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _ro
     row_P[0] = 0;
     for(int n = 0; n < N; n++) row_P[n + 1] = row_P[n] + (unsigned int) K;
 
-    // Build ball tree on data set
-    VpTree<DataPoint, euclidean_distance> *tree = new VpTree<DataPoint, euclidean_distance>();
-    vector<DataPoint> obj_X(N, DataPoint(D, -1, X));
-    for (int n = 0; n < N; n++) obj_X[n] = DataPoint(D, n, X + n * D);
-    tree->create(obj_X);
+    printf("Building Annoy tree...\n");
+    AnnoyIndex<int, double, Euclidean, Kiss32Random> tree = AnnoyIndex<int, double, Euclidean, Kiss32Random>(D);
+    for(int i=0; i<N; ++i){
+        double *vec = (double *) malloc( D * sizeof(double) );
 
-    // Loop over all points to find nearest neighbors
-    printf("Building VP tree...\n");
+        for(int z=0; z<D; ++z){
+            vec[z] = X[i*D+z];
+        }
+
+        tree.add_item(i, vec);
+    }
+    tree.build(num_trees);
+    //Check if it returns enough neighbors
+    std::vector<int> closest;
+    std::vector<double> closest_distances;
+    for (int n = 0; n < 100; n++){
+        tree.get_nns_by_item(n, K+1, search_k, &closest, &closest_distances);
+        unsigned int neighbors_count = closest.size();
+        if (neighbors_count < K+1 ) {
+            printf("Requesting perplexity*3=%d neighbors, but ANNOY is only giving us %u. Please increase search_k\n", K, neighbors_count);
+            return -1;
+        }
+    }
+    printf("Done building tree. Beginning nearest neighbor search... \n");
 
     if (nthreads == 0) {
         nthreads = std::thread::hardware_concurrency();
@@ -1203,16 +1097,91 @@ void TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _ro
                         {
                             // inner loop
                             {
-                                //double* cur_P = (double*) malloc((N - 1) * sizeof(double));
+                                // Find nearest neighbors
+                                std::vector<int> closest;
+                                std::vector<double> closest_distances;
+                                tree.get_nns_by_item(n, K+1, search_k, &closest, &closest_distances);
+
+                                double* cur_P = (double*) malloc((N - 1) * sizeof(double));
+                                if(cur_P == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+
+                                double beta = distances2similarities(&closest_distances[1], cur_P, K, -1, perplexity, sigma, false);
+                                if(n % 10000 == 0) {
+                                    if (perplexity > 0) {
+                                        printf(" - point %d of %d, most recent beta calculated is %lf \n", n, N, beta);
+                                    } else {
+                                        printf(" - point %d of %d, beta is set to %lf \n", n, N, 1/sigma);
+                                    }
+                                }
+
+                                // Store current row of P in matrix
+                                for(unsigned int m = 0; m < K; m++) {
+                                    col_P[row_P[n] + m] = (unsigned int) closest[m + 1];
+                                    val_P[row_P[n] + m] = cur_P[m];
+                                }
+
+                                free(cur_P);
+                                closest.clear();
+                                closest_distances.clear();
+                            }
+                        }
+                    },t*N/nthreads,(t+1)==nthreads?N:(t+1)*N/nthreads,t));
+        }
+        std::for_each(threads.begin(),threads.end(),[](std::thread& x){x.join();});
+        // Post loop
+    }
+
+    return 0;
+}
+
+
+// Compute input similarities with a fixed perplexity using ball trees (this function allocates memory another function should free)
+void TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row_P, unsigned int **_col_P, 
+                                     double **_val_P, double perplexity, int K, double sigma, unsigned int nthreads) {
+
+    if(perplexity > K) printf("Perplexity should be lower than K!\n");
+
+    // Allocate the memory we need
+    printf("Going to allocate memory. N: %d, K: %d, N*K = %d\n", N, K, N*K);
+    *_row_P = (unsigned int*)    malloc((N + 1) * sizeof(unsigned int));
+    *_col_P = (unsigned int*)    calloc(N * K, sizeof(unsigned int));
+    *_val_P = (double*) calloc(N * K, sizeof(double));
+    if(*_row_P == NULL || *_col_P == NULL || *_val_P == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+    unsigned int* row_P = *_row_P;
+    unsigned int* col_P = *_col_P;
+    double* val_P = *_val_P;
+    row_P[0] = 0;
+    for(int n = 0; n < N; n++) row_P[n + 1] = row_P[n] + (unsigned int) K;
+
+    // Build ball tree on data set
+    printf("Building VP tree...\n");
+    VpTree<DataPoint, euclidean_distance> *tree = new VpTree<DataPoint, euclidean_distance>();
+    vector<DataPoint> obj_X(N, DataPoint(D, -1, X));
+    for (int n = 0; n < N; n++) obj_X[n] = DataPoint(D, n, X + n * D);
+    tree->create(obj_X);
+    printf("Done building tree. Beginning nearest neighbor search... \n");
+
+    if (nthreads == 0) {
+        nthreads = std::thread::hardware_concurrency();
+    }
+    //const size_t nthreads = 1;
+    {
+        // Pre loop
+        std::cout << "parallel (" << nthreads << " threads):" << std::endl;
+        std::vector<std::thread> threads(nthreads);
+        for (int t = 0; t < nthreads; t++) {
+            threads[t] = std::thread(std::bind(
+                    [&](const int bi, const int ei, const int t)
+                    {
+                        // loop over all items
+                        for(int n = bi;n<ei;n++)
+                        {
+                            // inner loop
+                            {
+                                // Find nearest neighbors
                                 std::vector<double> cur_P(K);
-                                //if(cur_P == NULL) { printf("Memory allocation failed!\n"); exit(1); }
-
-                                // if(n % 10000 == 0) printf(" - Thread %d: %d/%d \n",t, n-bi, ei-bi );
-                                // if(n % 100 == 0) printf(" - point %d of %d\n", n, N);
-
                                 vector<DataPoint> indices;
                                 vector<double> distances;
-                                // Find nearest neighbors
                                 tree->search(obj_X[n], K + 1, &indices, &distances);
 
                                 double beta = distances2similarities(&distances[1], &cur_P[0], K, -1, perplexity, sigma, false);
@@ -1240,7 +1209,6 @@ void TSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned int** _ro
         std::for_each(threads.begin(),threads.end(),[](std::thread& x){x.join();});
         // Post loop
     }
-    printf("Done!\n");
 
     // Clean up memory
     obj_X.clear();
