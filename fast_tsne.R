@@ -12,7 +12,7 @@ fftRtsne <- function(X,
 		     K=-1, sigma=-30, initialization=NULL,
 		     data_path=NULL, result_path=NULL,
 		     load_affinities=NULL,
-		     fast_tsne_path=NULL, nthreads=0, ...) {
+		     fast_tsne_path=NULL, nthreads=0, perplexity_list = NULL, ...) {
 
 	if (is.null(fast_tsne_path)) {
 		if(.Platform$OS.type == "unix") {
@@ -45,7 +45,15 @@ fftRtsne <- function(X,
 	if (!is.wholenumber(stop_lying_iter) || stop_lying_iter<0) { stop("stop_lying_iter should be a positive integer")}
 	if (!is.numeric(exaggeration_factor)) { stop("exaggeration_factor should be numeric")}
 	if (!is.wholenumber(dims) || dims<=0) { stop("Incorrect dimensionality.")}
-	if (search_k == -1) { if (perplexity>0) {search_k = n_trees*perplexity*3} else { search_k = n_trees*K*3} }
+	if (search_k == -1) {
+       if (perplexity>0) {
+          search_k = n_trees*perplexity*3
+       } else if (perplexity==0) {
+          search_k = n_trees*max(perplexity_list)*3
+       } else { 
+          search_k = n_trees*K*3
+       }
+    }
 
 	if (fft_not_bh){
 	  nbody_algo = 2;
@@ -79,6 +87,12 @@ fftRtsne <- function(X,
 	writeBin( as.integer(D),f,size= 4)
 	writeBin( as.numeric(theta), f,size= 8) #theta
 	writeBin( as.numeric(perplexity), f,size= 8) #theta
+
+    if (perplexity == 0) {
+    	writeBin( as.integer(length(perplexity_list)), f, size=4)
+	    writeBin( perplexity_list, f) 
+    }
+
 	writeBin( as.integer(dims), f,size=4) #theta
 	writeBin( as.integer(max_iter),f,size=4)
 	writeBin( as.integer(stop_lying_iter),f,size=4)

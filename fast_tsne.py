@@ -9,18 +9,21 @@ import numpy as np
 # Usage example:
 #	from fast_tsne import fast_tsne
 #	X = np.random.randn(1000, 50)
-#	fast_tsne(X, perplexity = 30)
+#	Z = fast_tsne(X, perplexity = 30)
 
 def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000, 
               stop_lying_iter=200, K=-1, sigma=-30, nbody_algo='FFT', knn_algo='annoy',
               early_exag_coeff=12, no_momentum_during_exag=0, n_trees=50, 
               search_k=None, start_late_exag_iter=-1, late_exag_coeff=-1,
               nterms=3, intervals_per_integer=1, min_num_intervals=50,            
-              seed=-1, initialization=None, load_affinities=None):
+              seed=-1, initialization=None, load_affinities=None,
+              perplexity_list=None):
     
     if search_k is None:
         if perplexity > 0:
             search_k = 3 * perplexity * n_trees
+        elif perplexity == 0:
+            search_k = 3 * np.max(perplexity_list) * n_trees
         else:
             search_k = 3 * K * n_trees
         
@@ -52,6 +55,10 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
         f.write(struct.pack('=i', d))   
         f.write(struct.pack('=d', theta))
         f.write(struct.pack('=d', perplexity))
+        if perplexity==0:
+            f.write(struct.pack('=i', len(perplexity_list)))
+            for perpl in perplexity_list:
+                f.write(struct.pack('=d', perpl))
         f.write(struct.pack('=i', map_dims))
         f.write(struct.pack('=i', max_iter))
         f.write(struct.pack('=i', stop_lying_iter))
