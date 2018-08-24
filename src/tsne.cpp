@@ -44,6 +44,7 @@
 #include "vptree.h"
 #include "sptree.h"
 #include "tsne.h"
+#include "progress_bar/ProgressBar.hpp"
 
 #ifdef _WIN32
 #include "winlibs/unistd.h"
@@ -1128,7 +1129,7 @@ int TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row
         }
     }
     printf("Done building tree. Beginning nearest neighbor search... \n");
-
+    ProgressBar bar(N,100);
     if (nthreads == 0) {
         nthreads = std::thread::hardware_concurrency();
     }
@@ -1156,12 +1157,14 @@ int TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row
 
                                 double beta = distances2similarities(&closest_distances[1], cur_P, K, -1, perplexity, sigma, false,
                                                                      perplexity_list_length, perplexity_list);
-                                if(n % 10000 == 0) {
-                                    if (perplexity >= 0) {
-                                        printf(" - point %d of %d, most recent beta calculated is %lf \n", n, N, beta);
-                                    } else {
-                                        printf(" - point %d of %d, beta is set to %lf \n", n, N, 1/sigma);
-                                    }
+                                ++bar;
+                                if(t == 0 && n % 100 == 0) {
+                                    bar.display();
+                                //    if (perplexity >= 0) {
+                                //        printf(" - point %d of %d, most recent beta calculated is %lf \n", n, N, beta);
+                                //    } else {
+                                //        printf(" - point %d of %d, beta is set to %lf \n", n, N, 1/sigma);
+                                //    }
                                 }
 
                                 // Store current row of P in matrix
@@ -1180,6 +1183,8 @@ int TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row
         std::for_each(threads.begin(),threads.end(),[](std::thread& x){x.join();});
         // Post loop
     }
+    bar.display();
+    printf("\n");
 
     return 0;
 }
@@ -1212,6 +1217,10 @@ void TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_ro
     tree->create(obj_X);
     printf("Done building tree. Beginning nearest neighbor search... \n");
 
+
+    ProgressBar bar(N,100);
+
+
     if (nthreads == 0) {
         nthreads = std::thread::hardware_concurrency();
     }
@@ -1237,12 +1246,14 @@ void TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_ro
 
                                 double beta = distances2similarities(&distances[1], &cur_P[0], K, -1, perplexity, sigma, false,
                                                                      perplexity_list_length, perplexity_list);
-                                if(n % 10000 == 0) {
-                                    if (perplexity >= 0) {
-                                        printf(" - point %d of %d, most recent beta calculated is %lf \n", n, N, beta);
-                                    } else {
-                                        printf(" - point %d of %d, beta is set to %lf \n", n, N, 1/sigma);
-                                    }
+                                ++bar;
+                                if(t == 0 && n % 100 == 0) {
+                                    bar.display();
+                                //    if (perplexity >= 0) {
+                                //        printf(" - point %d of %d, most recent beta calculated is %lf \n", n, N, beta);
+                                //    } else {
+                                //        printf(" - point %d of %d, beta is set to %lf \n", n, N, 1/sigma);
+                                //    }
                                 }
 
                                 for(unsigned int m = 0; m < K; m++) {
@@ -1262,6 +1273,8 @@ void TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_ro
         // Post loop
     }
 
+    bar.display();
+    printf("\n");
     // Clean up memory
     obj_X.clear();
     delete tree;
