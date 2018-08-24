@@ -1129,7 +1129,7 @@ int TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row
         }
     }
     printf("Done building tree. Beginning nearest neighbor search... \n");
-    ProgressBar bar(N,100);
+    ProgressBar bar(N,70);
     if (nthreads == 0) {
         nthreads = std::thread::hardware_concurrency();
     }
@@ -1218,7 +1218,7 @@ void TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_ro
     printf("Done building tree. Beginning nearest neighbor search... \n");
 
 
-    ProgressBar bar(N,100);
+    ProgressBar bar(N,70);
 
 
     if (nthreads == 0) {
