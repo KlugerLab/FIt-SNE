@@ -490,11 +490,19 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
         if ((iter % 50 == 0 || iter == max_iter - 1)) {
             clock_t end = clock();
             double C = .0;
-            if (exact) C = evaluateError(P, Y, N, no_dims);
+            if (exact) {
+                C = evaluateError(P, Y, N, no_dims);
+            }else{
+                if (nbody_algorithm == 2) {
+                    C = evaluateErrorFft(row_P, col_P, val_P, Y, N, no_dims);
+                }else {
+                    C = evaluateError(row_P, col_P, val_P, Y, N, no_dims,theta);
+                }
+            }
             costs[iter] = C;
             if (iter > 0) {
                 total_time += (float) (end - start) / CLOCKS_PER_SEC;
-                printf("Iteration %d (50 iterations in %f seconds)\n", iter, (float) (end - start) / CLOCKS_PER_SEC);
+                printf("Iteration %d (50 iterations in %.2f seconds), cost %f\n", iter, (float) (end - start) / CLOCKS_PER_SEC, C);
             }
             start = clock();
         }
@@ -622,6 +630,7 @@ void TSNE::computeFftGradientOneD(double *P, unsigned int *inp_row_P, unsigned i
         sum_Q += (1 + Y[i] * Y[i]) * phi1 - 2 * (Y[i] * phi2) + phi3;
     }
     sum_Q -= N;
+    this->current_sum_Q = sum_Q;
 
     // Now, figure out the Gaussian component of the gradient. This corresponds to the "attraction" term of the
     // gradient. It was calculated using a fast KNN approach, so here we just use the results that were passed to this
@@ -724,6 +733,7 @@ void TSNE::computeFftGradient(double *P, unsigned int *inp_row_P, unsigned int *
     }
     sum_Q -= N;
 
+    this->current_sum_Q = sum_Q;
     // Now, figure out the Gaussian component of the gradient. This corresponds to the "attraction" term of the
     // gradient. It was calculated using a fast KNN approach, so here we just use the results that were passed to this
     // function
@@ -907,6 +917,33 @@ double TSNE::evaluateError(double *P, double *Y, int N, int D) {
     // Clean up memory
     free(DD);
     free(Q);
+    return C;
+}
+
+// Evaluate t-SNE cost function (approximately) using FFT
+double TSNE::evaluateErrorFft(unsigned int *row_P, unsigned int *col_P, double *val_P, double *Y, int N, int D) {
+    // Get estimate of normalization term
+    double sum_Q = this->current_sum_Q;
+    double *buff = (double *) calloc(D, sizeof(double));
+
+    // Loop over all edges to compute t-SNE error
+    int ind1, ind2;
+    double C = .0, Q;
+    for (int n = 0; n < N; n++) {
+        ind1 = n * D;
+        for (int i = row_P[n]; i < row_P[n + 1]; i++) {
+            Q = .0;
+            ind2 = col_P[i] * D;
+            for (int d = 0; d < D; d++) buff[d] = Y[ind1 + d];
+            for (int d = 0; d < D; d++) buff[d] -= Y[ind2 + d];
+            for (int d = 0; d < D; d++) Q += buff[d] * buff[d];
+            Q = (1.0 / (1.0 + Q)) / sum_Q;
+            C += val_P[i] * log((val_P[i] + FLT_MIN) / (Q + FLT_MIN));
+        }
+    }
+
+    // Clean up memory
+    free(buff);
     return C;
 }
 

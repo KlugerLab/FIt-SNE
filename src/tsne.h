@@ -61,6 +61,7 @@ public:
     void symmetrizeMatrix(unsigned int **row_P, unsigned int **col_P, double **val_P, int N); // should be static!
 
 private:
+    double current_sum_Q;
     void computeGradient(double *P, unsigned int *inp_row_P, unsigned int *inp_col_P, double *inp_val_P, double *Y,
                          int N, int D, double *dC, double theta);
 
@@ -81,6 +82,7 @@ private:
     double evaluateError(unsigned int *row_P, unsigned int *col_P, double *val_P, double *Y, int N, int D,
                          double theta);
 
+    double evaluateErrorFft(unsigned int *row_P, unsigned int *col_P, double *val_P, double *Y, int N, int D);
     void zeroMean(double *X, int N, int D);
 
 	double distances2similarities(double *D, double *P, int N, int n, double perplexity, double sigma, bool ifSquared);
