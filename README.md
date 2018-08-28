@@ -20,7 +20,10 @@ The only prerequisite is [FFTW](http://www.fftw.org/), which can be downloaded a
 ```bash
     g++ -std=c++11 -O3  src/sptree.cpp src/tsne.cpp src/nbodyfft.cpp  -o bin/fast_tsne -pthread -lfftw3 -lm
 ```
-And you're good to go! Check out `examples/` for usage.
+See [here](https://github.com/KlugerLab/FIt-SNE/issues/1) for solution to compilation errors relating to `clock_gettime`.
+
+Check out `examples/` for usage.
+
 
 ### Windows
 A Windows implementation has been added (thanks to [Josef Spidlen](https://github.com/jspidlen)!), and has been currently tested with MS Visual Studio 2015 (i.e., MS Visual Studio Version 14).
