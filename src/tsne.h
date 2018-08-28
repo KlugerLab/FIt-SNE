@@ -67,7 +67,7 @@ private:
 
     void computeFftGradient(double *P, unsigned int *inp_row_P, unsigned int *inp_col_P, double *inp_val_P, double *Y,
                                 int N, int D, double *dC, int n_interpolation_points, double intervals_per_integer,
-                                int min_num_intervals);
+                                int min_num_intervals, unsigned int nthreads);
 
     void computeFftGradientOneD(double *P, unsigned int *inp_row_P, unsigned int *inp_col_P, double *inp_val_P,
                                     double *Y, int N, int D, double *dC, int n_interpolation_points,

@@ -12,7 +12,8 @@ fftRtsne <- function(X,
 		     K=-1, sigma=-30, initialization=NULL,
 		     data_path=NULL, result_path=NULL,
 		     load_affinities=NULL,
-		     fast_tsne_path=NULL, nthreads=0, perplexity_list = NULL, ...) {
+		     fast_tsne_path=NULL, nthreads=0, perplexity_list = NULL, 
+                     get_costs = FALSE, ... ) {
 
 	if (is.null(fast_tsne_path)) {
 		if(.Platform$OS.type == "unix") {
@@ -126,11 +127,18 @@ fftRtsne <- function(X,
 	n <- readBin(f, integer(), n=1, size=4);
 	d <- readBin(f, integer(), n=1,size=4);
 	Y <- readBin(f, numeric(), n=n*d);
-	Yout <- t(matrix(Y, nrow=d));
-	close(f)
-	file.remove(data_path)
-	file.remove(result_path)
-	Yout
+        Y <- t(matrix(Y, nrow=d));
+        if (get_costs ) {
+            landmarks <- readBin(f, numeric(), n=max_iter,size=4);
+            costs <- readBin(f, numeric(), n=max_iter,size=8);
+            Yout <- list( Y=Y, costs=costs);
+        }else {
+            Yout <- Y;
+        }
+        close(f)
+        file.remove(data_path)
+        file.remove(result_path)
+        return(Yout)
 }
 
 
