@@ -30,6 +30,8 @@
  *
  */
 
+#include <chrono>
+using namespace std::chrono;
 #include "winlibs/stdafx.h"
 
 #include <iostream>
@@ -131,7 +133,11 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
 
     // Set learning parameters
     float total_time = .0;
-    clock_t start, end;
+    struct timespec start, end;
+
+
+
+
     double momentum = .5, final_momentum = .8;
 
     // Step size
@@ -363,7 +369,7 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
 				   row_P[N - 2], row_P[N - 1], row_P[N]);
 		}
 	}
-	end = clock();
+        clock_gettime(CLOCK_MONOTONIC, &end);
 
     // Initialize solution (randomly)
     if (skip_random_init != true) {
@@ -408,7 +414,8 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
                (double) row_P[N] / ((double) N * (double) N));
     }
 
-    start = clock();
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    
     if (!exact) {
         if (nbody_algorithm == 2) {
             printf("Using FIt-SNE approximation.\n");
@@ -431,10 +438,10 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
                 // Use FFT accelerated interpolation based negative gradients
                 if (no_dims == 1) {
                     computeFftGradientOneD(P, row_P, col_P, val_P, Y, N, no_dims, dY, nterms, intervals_per_integer,
-                                           min_num_intervals);
+                                           min_num_intervals, nthreads);
                 } else {
                     computeFftGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, nterms, intervals_per_integer,
-                                       min_num_intervals);
+                                       min_num_intervals, nthreads);
                 }
             } else if (nbody_algorithm == 1) {
                 // Otherwise, compute the negative gradient using the Barnes-Hut approximation
@@ -445,7 +452,7 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
         if (measure_accuracy) {
             computeGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta);
             computeFftGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, nterms, intervals_per_integer,
-                               min_num_intervals);
+                               min_num_intervals, nthreads);
             computeExactGradientTest(Y, N, no_dims);
         }
 
@@ -488,15 +495,23 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
 
         // Print out progress
         if ((iter % 50 == 0 || iter == max_iter - 1)) {
-            clock_t end = clock();
+            clock_gettime(CLOCK_MONOTONIC, &end);
             double C = .0;
-            if (exact) C = evaluateError(P, Y, N, no_dims);
+            if (exact) {
+                C = evaluateError(P, Y, N, no_dims);
+            }else{
+                if (nbody_algorithm == 2) {
+                    C = evaluateErrorFft(row_P, col_P, val_P, Y, N, no_dims);
+                }else {
+                    C = evaluateError(row_P, col_P, val_P, Y, N, no_dims,theta);
+                }
+            }
             costs[iter] = C;
             if (iter > 0) {
-                total_time += (float) (end - start) / CLOCKS_PER_SEC;
-                printf("Iteration %d (50 iterations in %f seconds)\n", iter, (float) (end - start) / CLOCKS_PER_SEC);
+                total_time += (float) (end.tv_sec - start.tv_sec) / CLOCKS_PER_SEC;
+                printf("Iteration %d (50 iterations in %ld seconds), cost %f\n", iter, (end.tv_sec - start.tv_sec), C);
             }
-            start = clock();
+            clock_gettime(CLOCK_MONOTONIC, &start);
         }
     }
 
@@ -564,7 +579,10 @@ void TSNE::computeGradient(double *P, unsigned int *inp_row_P, unsigned int *inp
 // dimensional Ys
 void TSNE::computeFftGradientOneD(double *P, unsigned int *inp_row_P, unsigned int *inp_col_P, double *inp_val_P,
                                   double *Y, int N, int D, double *dC, int n_interpolation_points,
-                                  double intervals_per_integer, int min_num_intervals) {
+                                  double intervals_per_integer, int min_num_intervals, unsigned int nthreads) {
+    if (nthreads == 0) {
+        nthreads = std::thread::hardware_concurrency();
+    }
     // Zero out the gradient
     for (int i = 0; i < N * D; i++) dC[i] = 0.0;
 
@@ -622,24 +640,49 @@ void TSNE::computeFftGradientOneD(double *P, unsigned int *inp_row_P, unsigned i
         sum_Q += (1 + Y[i] * Y[i]) * phi1 - 2 * (Y[i] * phi2) + phi3;
     }
     sum_Q -= N;
+    this->current_sum_Q = sum_Q;
 
     // Now, figure out the Gaussian component of the gradient. This corresponds to the "attraction" term of the
     // gradient. It was calculated using a fast KNN approach, so here we just use the results that were passed to this
     // function
-    unsigned int ind2 = 0;
-    double *pos_f = new double[N];
-    // Loop over all edges in the graph
-    double q_ij, d_ij;
-    for (unsigned int n = 0; n < N; n++) {
-        pos_f[n] = 0;
-        for (unsigned int i = inp_row_P[n]; i < inp_row_P[n + 1]; i++) {
-            // Compute pairwise distance and Q-value
-            ind2 = inp_col_P[i];
-            d_ij = Y[n] - Y[ind2];
-            q_ij = 1 / (1 + d_ij * d_ij);
-            pos_f[n] += inp_val_P[i] * q_ij * d_ij;
+//    unsigned int ind2 = 0;
+  double *pos_f = new double[N];
+
+    {
+        // Pre loop
+        std::vector<std::thread> threads(nthreads);
+        for (int t = 0; t < nthreads; t++) {
+            threads[t] = std::thread(std::bind(
+                    [&](const int bi, const int ei, const int t)
+                    {
+                        // loop over all items
+                        for(int n = bi;n<ei;n++)
+                        {
+                            // inner loop
+                            {
+                                double dim1 = 0;
+                                for (unsigned int i = inp_row_P[n]; i < inp_row_P[n + 1]; i++) {
+                                    // Compute pairwise distance and Q-value
+                                    unsigned int ind3 = inp_col_P[i];
+                                    double d_ij = Y[n] - Y[ind3];
+                                    double q_ij = 1 / (1 + d_ij * d_ij);
+                                    dim1 += inp_val_P[i] * q_ij * d_ij;
+                                }
+                                    pos_f[n] = dim1;
+
+                            }
+                        }
+
+                    },t*N/nthreads,(t+1)==nthreads?N:(t+1)*N/nthreads,t));
         }
-    }
+        std::for_each(threads.begin(),threads.end(),[](std::thread& x){x.join();});
+        // Post loop
+  }
+
+
+
+
+
 
     // Make the negative term, or F_rep in the equation 3 of the paper
     double *neg_f = new double[N];
@@ -659,7 +702,13 @@ void TSNE::computeFftGradientOneD(double *P, unsigned int *inp_row_P, unsigned i
 // Compute the gradient of the t-SNE cost function using the FFT interpolation based approximation
 void TSNE::computeFftGradient(double *P, unsigned int *inp_row_P, unsigned int *inp_col_P, double *inp_val_P, double *Y,
                               int N, int D, double *dC, int n_interpolation_points, double intervals_per_integer,
-                              int min_num_intervals) {
+                              int min_num_intervals, unsigned int nthreads) {
+
+
+    if (nthreads == 0) {
+        nthreads = std::thread::hardware_concurrency();
+    }
+
     // Zero out the gradient
     for (int i = 0; i < N * D; i++) dC[i] = 0.0;
 
@@ -724,26 +773,59 @@ void TSNE::computeFftGradient(double *P, unsigned int *inp_row_P, unsigned int *
     }
     sum_Q -= N;
 
+    this->current_sum_Q = sum_Q;
+
+    double *pos_f = new double[N * 2];
+
     // Now, figure out the Gaussian component of the gradient. This corresponds to the "attraction" term of the
     // gradient. It was calculated using a fast KNN approach, so here we just use the results that were passed to this
     // function
     unsigned int ind2 = 0;
-    double *pos_f = new double[N * 2];
-    // Loop over all edges in the graph
-    for (unsigned int n = 0; n < N; n++) {
-        pos_f[n * 2 + 0] = 0;
-        pos_f[n * 2 + 1] = 0;
+    {
+        // Pre loop
+        std::vector<std::thread> threads(nthreads);
+        for (int t = 0; t < nthreads; t++) {
+            threads[t] = std::thread(std::bind(
+                    [&](const int bi, const int ei, const int t)
+                    {
+                        // loop over all items
+                        for(int n = bi;n<ei;n++)
+                        {
+                            // inner loop
+                            {
 
-        for (unsigned int i = inp_row_P[n]; i < inp_row_P[n + 1]; i++) {
-            // Compute pairwise distance and Q-value
-            ind2 = inp_col_P[i];
-            double d_ij = (xs[n] - xs[ind2]) * (xs[n] - xs[ind2]) + (ys[n] - ys[ind2]) * (ys[n] - ys[ind2]);
-            double q_ij = 1 / (1 + d_ij);
+                                double dim1 = 0;
+                                double dim2 = 0;
 
-            pos_f[n * 2 + 0] += inp_val_P[i] * q_ij * (xs[n] - xs[ind2]);
-            pos_f[n * 2 + 1] += inp_val_P[i] * q_ij * (ys[n] - ys[ind2]);
+                                for (unsigned int i = inp_row_P[n]; i < inp_row_P[n + 1]; i++) {
+                                // Compute pairwise distance and Q-value
+                                    unsigned int ind3 = inp_col_P[i];
+                                    double d_ij = (xs[n] - xs[ind3]) * (xs[n] - xs[ind3]) + (ys[n] - ys[ind3]) * (ys[n] - ys[ind3]);
+                                    double q_ij = 1 / (1 + d_ij);
+
+                                    dim1 += inp_val_P[i] * q_ij * (xs[n] - xs[ind3]);
+                                    dim2 += inp_val_P[i] * q_ij * (ys[n] - ys[ind3]);
+                                }
+                                pos_f[n * 2 + 0] = dim1;
+                                pos_f[n * 2 + 1] = dim2;
+
+                            }
+                        }
+
+                    },t*N/nthreads,(t+1)==nthreads?N:(t+1)*N/nthreads,t));
         }
-    }
+        std::for_each(threads.begin(),threads.end(),[](std::thread& x){x.join();});
+        // Post loop
+  }
+
+//clock_gettime(CLOCK_MONOTONIC, &finish2);
+//elapsed2 = (finish2.tv_nsec - start2.tv_nsec)/1E6;
+//cout << "MT" << elapsed2 <<endl;
+
+
+
+
+
 
     // Make the negative term, or F_rep in the equation 3 of the paper
     double *neg_f = new double[N * 2];
@@ -907,6 +989,33 @@ double TSNE::evaluateError(double *P, double *Y, int N, int D) {
     // Clean up memory
     free(DD);
     free(Q);
+    return C;
+}
+
+// Evaluate t-SNE cost function (approximately) using FFT
+double TSNE::evaluateErrorFft(unsigned int *row_P, unsigned int *col_P, double *val_P, double *Y, int N, int D) {
+    // Get estimate of normalization term
+    double sum_Q = this->current_sum_Q;
+    double *buff = (double *) calloc(D, sizeof(double));
+
+    // Loop over all edges to compute t-SNE error
+    int ind1, ind2;
+    double C = .0, Q;
+    for (int n = 0; n < N; n++) {
+        ind1 = n * D;
+        for (int i = row_P[n]; i < row_P[n + 1]; i++) {
+            Q = .0;
+            ind2 = col_P[i] * D;
+            for (int d = 0; d < D; d++) buff[d] = Y[ind1 + d];
+            for (int d = 0; d < D; d++) buff[d] -= Y[ind2 + d];
+            for (int d = 0; d < D; d++) Q += buff[d] * buff[d];
+            Q = (1.0 / (1.0 + Q)) / sum_Q;
+            C += val_P[i] * log((val_P[i] + FLT_MIN) / (Q + FLT_MIN));
+        }
+    }
+
+    // Clean up memory
+    free(buff);
     return C;
 }
 
@@ -1556,7 +1665,7 @@ bool TSNE::load_data(const char *data_path, double **data, double **Y, int *n,
 
 
 // Function that saves map to a t-SNE file
-void TSNE::save_data(const char *result_path, double* data, int* landmarks, double* costs, int n, int d, double initialError) {
+void TSNE::save_data(const char *result_path, double* data, int* landmarks, double* costs, int n, int d, double initialError, int max_iter) {
 	// Open file, write first 2 integers and then the data
 	FILE *h;
 	if((h = fopen(result_path, "w+b")) == NULL) {
@@ -1568,7 +1677,7 @@ void TSNE::save_data(const char *result_path, double* data, int* landmarks, doub
 	fwrite(&d, sizeof(int), 1, h);
 	fwrite(data, sizeof(double), n * d, h);
 	fwrite(landmarks, sizeof(int), n, h);
-	fwrite(costs, sizeof(double), n, h);
+	fwrite(costs, sizeof(double), max_iter, h);
 	fclose(h);
 	printf("Wrote the %i x %i data matrix successfully.\n", n, d);
 }
@@ -1646,7 +1755,7 @@ int main(int argc, char *argv[]) {
 		}
 
 		// Save the results
-		tsne->save_data(result_path, Y, landmarks, costs, N, no_dims, initialError);
+		tsne->save_data(result_path, Y, landmarks, costs, N, no_dims, initialError, max_iter);
 
 		// Clean up the memory
 		free(data); data = NULL;

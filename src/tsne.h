@@ -56,21 +56,22 @@ public:
 
     //bool load_initial_data(double** data);
     void save_data(const char *result_path, double *data, int *landmarks, double *costs, int n, int d,
-                   double initialError);
+                   double initialError, int max_iter);
 
     void symmetrizeMatrix(unsigned int **row_P, unsigned int **col_P, double **val_P, int N); // should be static!
 
 private:
+    double current_sum_Q;
     void computeGradient(double *P, unsigned int *inp_row_P, unsigned int *inp_col_P, double *inp_val_P, double *Y,
                          int N, int D, double *dC, double theta);
 
     void computeFftGradient(double *P, unsigned int *inp_row_P, unsigned int *inp_col_P, double *inp_val_P, double *Y,
                                 int N, int D, double *dC, int n_interpolation_points, double intervals_per_integer,
-                                int min_num_intervals);
+                                int min_num_intervals, unsigned int nthreads);
 
     void computeFftGradientOneD(double *P, unsigned int *inp_row_P, unsigned int *inp_col_P, double *inp_val_P,
                                     double *Y, int N, int D, double *dC, int n_interpolation_points,
-                                    double intervals_per_integer, int min_num_intervals);
+                                    double intervals_per_integer, int min_num_intervals, unsigned int nthreads);
 
     void computeExactGradient(double *P, double *Y, int N, int D, double *dC);
 
@@ -81,6 +82,7 @@ private:
     double evaluateError(unsigned int *row_P, unsigned int *col_P, double *val_P, double *Y, int N, int D,
                          double theta);
 
+    double evaluateErrorFft(unsigned int *row_P, unsigned int *col_P, double *val_P, double *Y, int N, int D);
     void zeroMean(double *X, int N, int D);
 
 	double distances2similarities(double *D, double *P, int N, int n, double perplexity, double sigma, bool ifSquared);
