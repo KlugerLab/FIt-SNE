@@ -438,7 +438,7 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
                 // Use FFT accelerated interpolation based negative gradients
                 if (no_dims == 1) {
                     computeFftGradientOneD(P, row_P, col_P, val_P, Y, N, no_dims, dY, nterms, intervals_per_integer,
-                                           min_num_intervals);
+                                           min_num_intervals, nthreads);
                 } else {
                     computeFftGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, nterms, intervals_per_integer,
                                        min_num_intervals, nthreads);
@@ -579,7 +579,10 @@ void TSNE::computeGradient(double *P, unsigned int *inp_row_P, unsigned int *inp
 // dimensional Ys
 void TSNE::computeFftGradientOneD(double *P, unsigned int *inp_row_P, unsigned int *inp_col_P, double *inp_val_P,
                                   double *Y, int N, int D, double *dC, int n_interpolation_points,
-                                  double intervals_per_integer, int min_num_intervals) {
+                                  double intervals_per_integer, int min_num_intervals, unsigned int nthreads) {
+    if (nthreads == 0) {
+        nthreads = std::thread::hardware_concurrency();
+    }
     // Zero out the gradient
     for (int i = 0; i < N * D; i++) dC[i] = 0.0;
 
@@ -642,20 +645,44 @@ void TSNE::computeFftGradientOneD(double *P, unsigned int *inp_row_P, unsigned i
     // Now, figure out the Gaussian component of the gradient. This corresponds to the "attraction" term of the
     // gradient. It was calculated using a fast KNN approach, so here we just use the results that were passed to this
     // function
-    unsigned int ind2 = 0;
-    double *pos_f = new double[N];
-    // Loop over all edges in the graph
-    double q_ij, d_ij;
-    for (unsigned int n = 0; n < N; n++) {
-        pos_f[n] = 0;
-        for (unsigned int i = inp_row_P[n]; i < inp_row_P[n + 1]; i++) {
-            // Compute pairwise distance and Q-value
-            ind2 = inp_col_P[i];
-            d_ij = Y[n] - Y[ind2];
-            q_ij = 1 / (1 + d_ij * d_ij);
-            pos_f[n] += inp_val_P[i] * q_ij * d_ij;
+//    unsigned int ind2 = 0;
+  double *pos_f = new double[N];
+
+    {
+        // Pre loop
+        std::vector<std::thread> threads(nthreads);
+        for (int t = 0; t < nthreads; t++) {
+            threads[t] = std::thread(std::bind(
+                    [&](const int bi, const int ei, const int t)
+                    {
+                        // loop over all items
+                        for(int n = bi;n<ei;n++)
+                        {
+                            // inner loop
+                            {
+                                double dim1 = 0;
+                                for (unsigned int i = inp_row_P[n]; i < inp_row_P[n + 1]; i++) {
+                                    // Compute pairwise distance and Q-value
+                                    unsigned int ind3 = inp_col_P[i];
+                                    double d_ij = Y[n] - Y[ind3];
+                                    double q_ij = 1 / (1 + d_ij * d_ij);
+                                    dim1 += inp_val_P[i] * q_ij * d_ij;
+                                }
+                                    pos_f[n] = dim1;
+
+                            }
+                        }
+
+                    },t*N/nthreads,(t+1)==nthreads?N:(t+1)*N/nthreads,t));
         }
-    }
+        std::for_each(threads.begin(),threads.end(),[](std::thread& x){x.join();});
+        // Post loop
+  }
+
+
+
+
+
 
     // Make the negative term, or F_rep in the equation 3 of the paper
     double *neg_f = new double[N];
