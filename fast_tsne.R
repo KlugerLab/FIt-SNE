@@ -129,7 +129,7 @@ fftRtsne <- function(X,
 	Y <- readBin(f, numeric(), n=n*d);
         Y <- t(matrix(Y, nrow=d));
         if (get_costs ) {
-            landmarks <- readBin(f, numeric(), n=max_iter,size=4);
+            landmarks <- readBin(f, numeric(), n=n,size=4);
             costs <- readBin(f, numeric(), n=max_iter,size=8);
             Yout <- list( Y=Y, costs=costs);
         }else {

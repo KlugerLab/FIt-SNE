@@ -1665,7 +1665,7 @@ bool TSNE::load_data(const char *data_path, double **data, double **Y, int *n,
 
 
 // Function that saves map to a t-SNE file
-void TSNE::save_data(const char *result_path, double* data, int* landmarks, double* costs, int n, int d, double initialError) {
+void TSNE::save_data(const char *result_path, double* data, int* landmarks, double* costs, int n, int d, double initialError, int max_iter) {
 	// Open file, write first 2 integers and then the data
 	FILE *h;
 	if((h = fopen(result_path, "w+b")) == NULL) {
@@ -1677,7 +1677,7 @@ void TSNE::save_data(const char *result_path, double* data, int* landmarks, doub
 	fwrite(&d, sizeof(int), 1, h);
 	fwrite(data, sizeof(double), n * d, h);
 	fwrite(landmarks, sizeof(int), n, h);
-	fwrite(costs, sizeof(double), n, h);
+	fwrite(costs, sizeof(double), max_iter, h);
 	fclose(h);
 	printf("Wrote the %i x %i data matrix successfully.\n", n, d);
 }
@@ -1755,7 +1755,7 @@ int main(int argc, char *argv[]) {
 		}
 
 		// Save the results
-		tsne->save_data(result_path, Y, landmarks, costs, N, no_dims, initialError);
+		tsne->save_data(result_path, Y, landmarks, costs, N, no_dims, initialError, max_iter);
 
 		// Clean up the memory
 		free(data); data = NULL;

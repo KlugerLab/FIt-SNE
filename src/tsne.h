@@ -56,7 +56,7 @@ public:
 
     //bool load_initial_data(double** data);
     void save_data(const char *result_path, double *data, int *landmarks, double *costs, int n, int d,
-                   double initialError);
+                   double initialError, int max_iter);
 
     void symmetrizeMatrix(unsigned int **row_P, unsigned int **col_P, double **val_P, int N); // should be static!
 
