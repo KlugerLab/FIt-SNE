@@ -245,6 +245,12 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
             load_affinities = 0;
         end
     end
+
+    if (~isfield(opts, 'nthreads'))
+        nthreads = 0;
+    else
+        nthreads = opts.nthreads;
+    end
     
     X = double(X);
     
@@ -264,7 +270,9 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
 
     disp('Data written');
     tic
-    [flag, cmdout] = system(fullfile(tsne_path,'/fast_tsne'), '-echo');
+    %[flag, cmdout] = system(fullfile(tsne_path,'/fast_tsne'), '-echo');
+    cmd = sprintf('%s temp/data.dat temp/result.dat %d',fullfile(tsne_path,'/fast_tsne'), nthreads);
+    [flag, cmdout] = system(cmd, '-echo');
     if(flag~=0)
         error(cmdout);
     end
