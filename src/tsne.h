@@ -80,9 +80,9 @@ private:
     double evaluateError(double *P, double *Y, int N, int D);
 
     double evaluateError(unsigned int *row_P, unsigned int *col_P, double *val_P, double *Y, int N, int D,
-                         double theta);
+                         double theta, unsigned int nthreads);
 
-    double evaluateErrorFft(unsigned int *row_P, unsigned int *col_P, double *val_P, double *Y, int N, int D);
+    double evaluateErrorFft(unsigned int *row_P, unsigned int *col_P, double *val_P, double *Y, int N, int D, unsigned int nthreads);
     void zeroMean(double *X, int N, int D);
 
 	double distances2similarities(double *D, double *P, int N, int n, double perplexity, double sigma, bool ifSquared);

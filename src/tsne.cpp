@@ -47,6 +47,7 @@ using namespace std::chrono;
 #include "sptree.h"
 #include "tsne.h"
 #include "progress_bar/ProgressBar.hpp"
+#include "parallel_for.h"
 
 #ifdef _WIN32
 #include "winlibs/unistd.h"
@@ -494,16 +495,16 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
         if (iter == mom_switch_iter) momentum = final_momentum;
 
         // Print out progress
-        if ((iter % 50 == 0 || iter == max_iter - 1)) {
+        if (iter > 0 && (iter % 50 == 0 || iter == max_iter - 1)) {
             clock_gettime(CLOCK_MONOTONIC, &end);
             double C = .0;
             if (exact) {
                 C = evaluateError(P, Y, N, no_dims);
             }else{
                 if (nbody_algorithm == 2) {
-                    C = evaluateErrorFft(row_P, col_P, val_P, Y, N, no_dims);
+                    C = evaluateErrorFft(row_P, col_P, val_P, Y, N, no_dims,nthreads);
                 }else {
-                    C = evaluateError(row_P, col_P, val_P, Y, N, no_dims,theta);
+                    C = evaluateError(row_P, col_P, val_P, Y, N, no_dims,theta, nthreads);
                 }
             }
             costs[iter] = C;
@@ -743,6 +744,19 @@ void TSNE::computeFftGradient(double *P, unsigned int *inp_row_P, unsigned int *
 
     // Compute the number of boxes in a single dimension and the total number of boxes in 2d
     auto n_boxes_per_dim = static_cast<int>(fmax(min_num_intervals, (max_coord - min_coord) / intervals_per_integer));
+
+
+    // FFTW works faster on numbers that can be written as  2^a 3^b 5^c 7^d
+    // 11^e 13^f, where e+f is either 0 or 1, and the other exponents are
+    // arbitrary
+    int allowed_n_boxes_per_dim[20] = {25,36, 50, 55, 60, 65, 70, 75, 80, 85, 90, 96, 100, 110, 120, 130, 140,150, 175, 200};
+    if ( n_boxes_per_dim < allowed_n_boxes_per_dim[19] ) {
+        //Round up to nearest grid point
+        int chosen_i;
+        for (chosen_i =0; allowed_n_boxes_per_dim[chosen_i]< n_boxes_per_dim; chosen_i++);
+        n_boxes_per_dim = allowed_n_boxes_per_dim[chosen_i];
+    }
+
     int n_boxes = n_boxes_per_dim * n_boxes_per_dim;
 
     auto *box_lower_bounds = new double[2 * n_boxes];
@@ -753,11 +767,14 @@ void TSNE::computeFftGradient(double *P, unsigned int *inp_row_P, unsigned int *
     auto *y_tilde = new double[n_interpolation_points_1d]();
     auto *fft_kernel_tilde = new complex<double>[2 * n_interpolation_points_1d * 2 * n_interpolation_points_1d];
 
+        struct timespec start10, end10, start20, end20,start30, end30;
+        clock_gettime(CLOCK_MONOTONIC, &start10);
+
     precompute_2d(max_coord, min_coord, max_coord, min_coord, n_boxes_per_dim, n_interpolation_points,
                   &squared_cauchy_2d,
                   box_lower_bounds, box_upper_bounds, y_tilde_spacings, x_tilde, y_tilde, fft_kernel_tilde);
     n_body_fft_2d(N, n_terms, xs, ys, chargesQij, n_boxes_per_dim, n_interpolation_points, box_lower_bounds,
-                  box_upper_bounds, y_tilde_spacings, fft_kernel_tilde, potentialsQij);
+                  box_upper_bounds, y_tilde_spacings, fft_kernel_tilde, potentialsQij,nthreads);
 
     // Compute the normalization constant Z or sum of q_{ij}. This expression is different from the one in the original
     // paper, but equivalent. This is done so we need only use a single kernel (K_2 in the paper) instead of two
@@ -777,50 +794,33 @@ void TSNE::computeFftGradient(double *P, unsigned int *inp_row_P, unsigned int *
 
     double *pos_f = new double[N * 2];
 
+        clock_gettime(CLOCK_MONOTONIC, &end10);
+	//printf("Interpolation: %lf ms\n", (diff(start10,end10))/(double)1E6);
+
+        clock_gettime(CLOCK_MONOTONIC, &start20);
     // Now, figure out the Gaussian component of the gradient. This corresponds to the "attraction" term of the
     // gradient. It was calculated using a fast KNN approach, so here we just use the results that were passed to this
     // function
-    unsigned int ind2 = 0;
-    {
-        // Pre loop
-        std::vector<std::thread> threads(nthreads);
-        for (int t = 0; t < nthreads; t++) {
-            threads[t] = std::thread(std::bind(
-                    [&](const int bi, const int ei, const int t)
-                    {
-                        // loop over all items
-                        for(int n = bi;n<ei;n++)
-                        {
-                            // inner loop
-                            {
-
+                    PARALLEL_FOR(nthreads, N, {
                                 double dim1 = 0;
                                 double dim2 = 0;
 
-                                for (unsigned int i = inp_row_P[n]; i < inp_row_P[n + 1]; i++) {
+                                for (unsigned int i = inp_row_P[loop_i]; i < inp_row_P[loop_i + 1]; i++) {
                                 // Compute pairwise distance and Q-value
                                     unsigned int ind3 = inp_col_P[i];
-                                    double d_ij = (xs[n] - xs[ind3]) * (xs[n] - xs[ind3]) + (ys[n] - ys[ind3]) * (ys[n] - ys[ind3]);
+                                    double d_ij = (xs[loop_i] - xs[ind3]) * (xs[loop_i] - xs[ind3]) + (ys[loop_i] - ys[ind3]) * (ys[loop_i] - ys[ind3]);
                                     double q_ij = 1 / (1 + d_ij);
 
-                                    dim1 += inp_val_P[i] * q_ij * (xs[n] - xs[ind3]);
-                                    dim2 += inp_val_P[i] * q_ij * (ys[n] - ys[ind3]);
+                                    dim1 += inp_val_P[i] * q_ij * (xs[loop_i] - xs[ind3]);
+                                    dim2 += inp_val_P[i] * q_ij * (ys[loop_i] - ys[ind3]);
                                 }
-                                pos_f[n * 2 + 0] = dim1;
-                                pos_f[n * 2 + 1] = dim2;
+                                pos_f[loop_i * 2 + 0] = dim1;
+                                pos_f[loop_i * 2 + 1] = dim2;
 
-                            }
-                        }
-
-                    },t*N/nthreads,(t+1)==nthreads?N:(t+1)*N/nthreads,t));
-        }
-        std::for_each(threads.begin(),threads.end(),[](std::thread& x){x.join();});
-        // Post loop
-  }
-
-//clock_gettime(CLOCK_MONOTONIC, &finish2);
-//elapsed2 = (finish2.tv_nsec - start2.tv_nsec)/1E6;
-//cout << "MT" << elapsed2 <<endl;
+                            });
+        clock_gettime(CLOCK_MONOTONIC, &end20);
+    //printf("Attractive forces took %lf\n", (diff(start20,end20))/(double)1E6);
+                            
 
 
 
@@ -993,57 +993,65 @@ double TSNE::evaluateError(double *P, double *Y, int N, int D) {
 }
 
 // Evaluate t-SNE cost function (approximately) using FFT
-double TSNE::evaluateErrorFft(unsigned int *row_P, unsigned int *col_P, double *val_P, double *Y, int N, int D) {
+double TSNE::evaluateErrorFft(unsigned int *row_P, unsigned int *col_P, double *val_P, double *Y, int N, int D,unsigned int nthreads) {
     // Get estimate of normalization term
+
+        struct timespec start10, end10, start20, end20,start30, end30;
+        clock_gettime(CLOCK_MONOTONIC, &start10);
     double sum_Q = this->current_sum_Q;
-    double *buff = (double *) calloc(D, sizeof(double));
 
     // Loop over all edges to compute t-SNE error
-    int ind1, ind2;
-    double C = .0, Q;
-    for (int n = 0; n < N; n++) {
-        ind1 = n * D;
-        for (int i = row_P[n]; i < row_P[n + 1]; i++) {
-            Q = .0;
-            ind2 = col_P[i] * D;
+    double C = .0;
+        PARALLEL_FOR(nthreads,N,{
+        double *buff = (double *) calloc(D, sizeof(double));
+        int ind1 = loop_i * D;
+        double temp = 0;
+        for (int i = row_P[loop_i]; i < row_P[loop_i + 1]; i++) {
+            double Q = .0;
+            int ind2 = col_P[i] * D;
             for (int d = 0; d < D; d++) buff[d] = Y[ind1 + d];
             for (int d = 0; d < D; d++) buff[d] -= Y[ind2 + d];
             for (int d = 0; d < D; d++) Q += buff[d] * buff[d];
             Q = (1.0 / (1.0 + Q)) / sum_Q;
-            C += val_P[i] * log((val_P[i] + FLT_MIN) / (Q + FLT_MIN));
+            temp += val_P[i] * log((val_P[i] + FLT_MIN) / (Q + FLT_MIN));
         }
-    }
+        C += temp;
+        free(buff);
+    });
 
+        clock_gettime(CLOCK_MONOTONIC, &end10);
+	//printf("compute error: %lf ms\n", (diff(start10,end10))/(double)1E6);
     // Clean up memory
-    free(buff);
     return C;
 }
 
 
 // Evaluate t-SNE cost function (approximately)
 double TSNE::evaluateError(unsigned int *row_P, unsigned int *col_P, double *val_P, double *Y, int N, int D,
-                           double theta) {
+                           double theta, unsigned int nthreads) {
     // Get estimate of normalization term
     SPTree *tree = new SPTree(D, Y, N);
     double *buff = (double *) calloc(D, sizeof(double));
     double sum_Q = .0;
     for (int n = 0; n < N; n++) tree->computeNonEdgeForces(n, theta, buff, &sum_Q);
 
-    // Loop over all edges to compute t-SNE error
-    int ind1, ind2;
-    double C = .0, Q;
-    for (int n = 0; n < N; n++) {
-        ind1 = n * D;
-        for (int i = row_P[n]; i < row_P[n + 1]; i++) {
-            Q = .0;
-            ind2 = col_P[i] * D;
+    double C = .0;
+        PARALLEL_FOR(nthreads,N,{
+        double *buff = (double *) calloc(D, sizeof(double));
+        int ind1 = loop_i * D;
+        double temp = 0;
+        for (int i = row_P[loop_i]; i < row_P[loop_i + 1]; i++) {
+            double Q = .0;
+            int ind2 = col_P[i] * D;
             for (int d = 0; d < D; d++) buff[d] = Y[ind1 + d];
             for (int d = 0; d < D; d++) buff[d] -= Y[ind2 + d];
             for (int d = 0; d < D; d++) Q += buff[d] * buff[d];
             Q = (1.0 / (1.0 + Q)) / sum_Q;
-            C += val_P[i] * log((val_P[i] + FLT_MIN) / (Q + FLT_MIN));
+            temp += val_P[i] * log((val_P[i] + FLT_MIN) / (Q + FLT_MIN));
         }
-    }
+        C += temp;
+        free(buff);
+    });
 
     // Clean up memory
     free(buff);
