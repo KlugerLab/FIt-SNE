@@ -1330,7 +1330,7 @@ void TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_ro
     printf("Done building tree. Beginning nearest neighbor search... \n");
 
 
-    ProgressBar bar(N,70);
+    ProgressBar bar(N,60);
 
 
     if (nthreads == 0) {
