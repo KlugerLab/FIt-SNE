@@ -10,7 +10,6 @@
 
 using namespace std;
 
-long int diff(timespec start, timespec end);
 typedef double (*kernel_type)(double, double);
 
 typedef double (*kernel_type_2d)(double, double, double, double);
