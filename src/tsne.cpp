@@ -507,7 +507,17 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
                     C = evaluateError(row_P, col_P, val_P, Y, N, no_dims,theta, nthreads);
                 }
             }
-            costs[iter] = C;
+            
+            // Adjusting the KL divergence if exaggeration is currently turned on
+            // See https://github.com/pavlin-policar/fastTSNE/blob/master/notes/notes.pdf, Section 3.2
+            if (iter < stop_lying_iter) {
+                C = C/early_exag_coeff - log(early_exag_coeff);
+            }
+            if (iter >= start_late_exag_iter) {
+                C = C/late_exag_coeff - log(late_exag_coeff);
+            }     
+
+            costs[iter] = C;       
             
             std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
             total_time += std::chrono::duration_cast<std::chrono::milliseconds>(now-start_time).count();
