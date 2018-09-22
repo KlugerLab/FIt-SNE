@@ -508,11 +508,11 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
                 }
             }
             costs[iter] = C;
-            if (iter > 0) {
-                std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
-                total_time += std::chrono::duration_cast<std::chrono::milliseconds>(now-start_time).count();
-                printf("Iteration %d (50 iterations in %.2f seconds), cost %f\n", iter, std::chrono::duration_cast<std::chrono::milliseconds>(now-start_time).count()/(float)1000.0, C);
-                start_time = std::chrono::steady_clock::now();
+            
+            std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+            total_time += std::chrono::duration_cast<std::chrono::milliseconds>(now-start_time).count();
+            printf("Iteration %d (50 iterations in %.2f seconds), cost %f\n", iter, std::chrono::duration_cast<std::chrono::milliseconds>(now-start_time).count()/(float)1000.0, C);
+            start_time = std::chrono::steady_clock::now();
             }
         }
     }
