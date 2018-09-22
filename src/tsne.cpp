@@ -1643,8 +1643,8 @@ bool TSNE::load_data(const char *data_path, double **data, double **Y, int *n,
 	fclose(h);
 	printf("Read the following parameters:\n\t n %d by d %d dataset, theta %lf,\n"
 			"\t perplexity %lf, no_dims %d, max_iter %d,\n"
-            "\t stop_lying_iter %d, K %d, sigma %lf, nbody_algo %d,\n"
-            "\t knn_algo %d, early_exag_coeff %lf,\n"
+			"\t stop_lying_iter %d, K %d, sigma %lf, nbody_algo %d,\n"
+			"\t knn_algo %d, early_exag_coeff %lf,\n"
 			"\t no_momentum_during_exag %d, n_trees %d, search_k %d,\n"
 			"\t start_late_exag_iter %d, late_exag_coeff %lf\n"
 			"\t nterms %d, interval_per_integer %lf, min_num_intervals %d\n",
