@@ -9,7 +9,7 @@ t-Stochastic Neighborhood Embedding ([t-SNE](https://lvdmaaten.github.io/tsne/))
 
 Check out our [preprint](https://arxiv.org/abs/1712.09005) for more details and some benchmarks.
 
-R and Matlab wrappers are `fast_tsne.R` and `fast_tsne.m` respectively. [Gioele La Manno](https://twitter.com/GioeleLaManno) implemented a Python (Cython) wrapper, which is available on PyPI [here](https://pypi.python.org/pypi/fitsne).
+R, Matlab, and Python wrappers are `fast_tsne.R`, `fast_tsne.m`, and `fast_tsne.py` respectively. [Gioele La Manno](https://twitter.com/GioeleLaManno) implemented a Python (Cython) wrapper, which is available on PyPI [here](https://pypi.python.org/pypi/fitsne).
 
 ## Installation
 
