@@ -30,9 +30,10 @@
  *
  */
 
-#include <chrono>
-using namespace std::chrono;
 #include "winlibs/stdafx.h"
+#ifdef _WIN32
+#define _CRT_SECURE_NO_DEPRECATE
+#endif
 
 #include <iostream>
 #include <fstream>
@@ -48,7 +49,9 @@ using namespace std::chrono;
 #include "tsne.h"
 #include "progress_bar/ProgressBar.hpp"
 #include "parallel_for.h"
+#include "time_code.h"
 
+using namespace std::chrono;
 #ifdef _WIN32
 #include "winlibs/unistd.h"
 #else
@@ -134,7 +137,6 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
 
     // Set learning parameters
     float total_time = .0;
-    struct timespec start, end;
 
 
 
@@ -370,7 +372,6 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
 				   row_P[N - 2], row_P[N - 1], row_P[N]);
 		}
 	}
-        clock_gettime(CLOCK_MONOTONIC, &end);
 
     // Initialize solution (randomly)
     if (skip_random_init != true) {
@@ -415,7 +416,7 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
                (double) row_P[N] / ((double) N * (double) N));
     }
 
-    clock_gettime(CLOCK_MONOTONIC, &start);
+    std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
     
     if (!exact) {
         if (nbody_algorithm == 2) {
@@ -496,7 +497,6 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
 
         // Print out progress
         if (iter > 0 && (iter % 50 == 0 || iter == max_iter - 1)) {
-            clock_gettime(CLOCK_MONOTONIC, &end);
             double C = .0;
             if (exact) {
                 C = evaluateError(P, Y, N, no_dims);
@@ -509,10 +509,11 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
             }
             costs[iter] = C;
             if (iter > 0) {
-                total_time += (float) (end.tv_sec - start.tv_sec) / CLOCKS_PER_SEC;
-                printf("Iteration %d (50 iterations in %ld seconds), cost %f\n", iter, (end.tv_sec - start.tv_sec), C);
+                std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+                total_time += std::chrono::duration_cast<std::chrono::milliseconds>(now-start_time).count();
+                printf("Iteration %d (50 iterations in %.2f seconds), cost %f\n", iter, std::chrono::duration_cast<std::chrono::milliseconds>(now-start_time).count()/(float)1000.0, C);
+                start_time = std::chrono::steady_clock::now();
             }
-            clock_gettime(CLOCK_MONOTONIC, &start);
         }
     }
 
@@ -767,9 +768,9 @@ void TSNE::computeFftGradient(double *P, unsigned int *inp_row_P, unsigned int *
     auto *y_tilde = new double[n_interpolation_points_1d]();
     auto *fft_kernel_tilde = new complex<double>[2 * n_interpolation_points_1d * 2 * n_interpolation_points_1d];
 
-        struct timespec start10, end10, start20, end20,start30, end30;
-        clock_gettime(CLOCK_MONOTONIC, &start10);
 
+    INITIALIZE_TIME;
+    START_TIME;
     precompute_2d(max_coord, min_coord, max_coord, min_coord, n_boxes_per_dim, n_interpolation_points,
                   &squared_cauchy_2d,
                   box_lower_bounds, box_upper_bounds, y_tilde_spacings, x_tilde, y_tilde, fft_kernel_tilde);
@@ -794,10 +795,8 @@ void TSNE::computeFftGradient(double *P, unsigned int *inp_row_P, unsigned int *
 
     double *pos_f = new double[N * 2];
 
-        clock_gettime(CLOCK_MONOTONIC, &end10);
-	//printf("Interpolation: %lf ms\n", (diff(start10,end10))/(double)1E6);
-
-        clock_gettime(CLOCK_MONOTONIC, &start20);
+    END_TIME("Total Interpolation");
+        START_TIME;
     // Now, figure out the Gaussian component of the gradient. This corresponds to the "attraction" term of the
     // gradient. It was calculated using a fast KNN approach, so here we just use the results that were passed to this
     // function
@@ -818,7 +817,7 @@ void TSNE::computeFftGradient(double *P, unsigned int *inp_row_P, unsigned int *
                                 pos_f[loop_i * 2 + 1] = dim2;
 
                             });
-        clock_gettime(CLOCK_MONOTONIC, &end20);
+    END_TIME("Attractive Forces");
     //printf("Attractive forces took %lf\n", (diff(start20,end20))/(double)1E6);
                             
 
@@ -996,8 +995,6 @@ double TSNE::evaluateError(double *P, double *Y, int N, int D) {
 double TSNE::evaluateErrorFft(unsigned int *row_P, unsigned int *col_P, double *val_P, double *Y, int N, int D,unsigned int nthreads) {
     // Get estimate of normalization term
 
-        struct timespec start10, end10, start20, end20,start30, end30;
-        clock_gettime(CLOCK_MONOTONIC, &start10);
     double sum_Q = this->current_sum_Q;
 
     // Loop over all edges to compute t-SNE error
@@ -1019,8 +1016,6 @@ double TSNE::evaluateErrorFft(unsigned int *row_P, unsigned int *col_P, double *
         free(buff);
     });
 
-        clock_gettime(CLOCK_MONOTONIC, &end10);
-	//printf("compute error: %lf ms\n", (diff(start10,end10))/(double)1E6);
     // Clean up memory
     return C;
 }

@@ -1,17 +1,10 @@
 #include "winlibs/stdafx.h"
 
 #include "parallel_for.h"
+#include "time_code.h"
 #include "nbodyfft.h"
 
 
-using namespace std;
-
-long int diff(timespec start, timespec end)
-{
-    long int tv_nsec;
-    tv_nsec = 1000000000*(end.tv_sec-start.tv_sec)+end.tv_nsec-start.tv_nsec;
-    return tv_nsec;
-}
 
 void precompute_2d(double x_max, double x_min, double y_max, double y_min, int n_boxes, int n_interpolation_points,
                    kernel_type_2d kernel, double *box_lower_bounds, double *box_upper_bounds, double *y_tilde_spacings,
@@ -120,6 +113,9 @@ void n_body_fft_2d(int N, int n_terms, double *xs, double *ys, double *chargesQi
         y_in_box[i] = (ys[i] - y_min) / box_width;
     }
 
+    INITIALIZE_TIME
+    START_TIME
+
     /*
      * Step 1: Interpolate kernel using Lagrange polynomials and compute the w coefficients
      */
@@ -150,8 +146,8 @@ void n_body_fft_2d(int N, int n_terms, double *xs, double *ys, double *chargesQi
         }
     }
 
-        struct timespec start10, end10, start20, end20,start30, end30;
-        clock_gettime(CLOCK_MONOTONIC, &start10);
+        END_TIME("Step 1");
+        START_TIME;
     /*
      * Step 2: Compute the values v_{m, n} at the equispaced nodes, multiply the kernel matrix with the coefficients w
      */
@@ -218,9 +214,8 @@ void n_body_fft_2d(int N, int n_terms, double *xs, double *ys, double *chargesQi
     delete[] fft_input;
     delete[] fft_output;
     delete[] mpol_sort;
-
-        clock_gettime(CLOCK_MONOTONIC, &end10);
-	//printf("FFT (nlat:%d ): %lf ms\n",n_boxes, (diff(start10,end10))/(double)1E6);
+    END_TIME("FFT");
+    START_TIME
     /*
      * Step 3: Compute the potentials \tilde{\phi}
      */
@@ -242,6 +237,7 @@ void n_body_fft_2d(int N, int n_terms, double *xs, double *ys, double *chargesQi
             }
         }
     });
+    END_TIME("Step 3");
     delete[] point_box_idx;
     delete[] x_interpolated_values;
     delete[] y_interpolated_values;
