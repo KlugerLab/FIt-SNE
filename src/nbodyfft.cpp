@@ -1,9 +1,9 @@
 #include "winlibs/stdafx.h"
 
+#include "parallel_for.h"
+#include "time_code.h"
 #include "nbodyfft.h"
 
-
-using namespace std;
 
 
 void precompute_2d(double x_max, double x_min, double y_max, double y_min, int n_boxes, int n_interpolation_points,
@@ -72,7 +72,7 @@ void precompute_2d(double x_max, double x_min, double y_max, double y_min, int n
 
 void n_body_fft_2d(int N, int n_terms, double *xs, double *ys, double *chargesQij, int n_boxes,
                    int n_interpolation_points, double *box_lower_bounds, double *box_upper_bounds,
-                   double *y_tilde_spacings, complex<double> *fft_kernel_tilde, double *potentialQij) {
+                   double *y_tilde_spacings, complex<double> *fft_kernel_tilde, double *potentialQij, unsigned int nthreads) {
     int n_total_boxes = n_boxes * n_boxes;
     int total_interpolation_points = n_total_boxes * n_interpolation_points * n_interpolation_points;
 
@@ -113,6 +113,9 @@ void n_body_fft_2d(int N, int n_terms, double *xs, double *ys, double *chargesQi
         y_in_box[i] = (ys[i] - y_min) / box_width;
     }
 
+    INITIALIZE_TIME
+    START_TIME
+
     /*
      * Step 1: Interpolate kernel using Lagrange polynomials and compute the w coefficients
      */
@@ -143,6 +146,8 @@ void n_body_fft_2d(int N, int n_terms, double *xs, double *ys, double *chargesQi
         }
     }
 
+        END_TIME("Step 1");
+        START_TIME;
     /*
      * Step 2: Compute the values v_{m, n} at the equispaced nodes, multiply the kernel matrix with the coefficients w
      */
@@ -209,12 +214,13 @@ void n_body_fft_2d(int N, int n_terms, double *xs, double *ys, double *chargesQi
     delete[] fft_input;
     delete[] fft_output;
     delete[] mpol_sort;
-
+    END_TIME("FFT");
+    START_TIME
     /*
      * Step 3: Compute the potentials \tilde{\phi}
      */
-    for (int i = 0; i < N; i++) {
-        int box_idx = point_box_idx[i];
+    PARALLEL_FOR(nthreads,N, {
+        int box_idx = point_box_idx[loop_i];
         int box_i = box_idx % n_boxes;
         int box_j = box_idx / n_boxes;
         for (int interp_i = 0; interp_i < n_interpolation_points; interp_i++) {
@@ -223,14 +229,15 @@ void n_body_fft_2d(int N, int n_terms, double *xs, double *ys, double *chargesQi
                     // Compute the index of the point in the interpolation grid of points
                     int idx = (box_i * n_interpolation_points + interp_i) * (n_boxes * n_interpolation_points) +
                               (box_j * n_interpolation_points) + interp_j;
-                    potentialQij[i * n_terms + d] +=
-                            x_interpolated_values[interp_i * N + i] *
-                            y_interpolated_values[interp_j * N + i] *
+                    potentialQij[loop_i * n_terms + d] +=
+                            x_interpolated_values[interp_i * N + loop_i] *
+                            y_interpolated_values[interp_j * N + loop_i] *
                             y_tilde_values[idx * n_terms + d];
                 }
             }
         }
-    }
+    });
+    END_TIME("Step 3");
     delete[] point_box_idx;
     delete[] x_interpolated_values;
     delete[] y_interpolated_values;
