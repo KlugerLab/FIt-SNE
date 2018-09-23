@@ -510,10 +510,10 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
             
             // Adjusting the KL divergence if exaggeration is currently turned on
             // See https://github.com/pavlin-policar/fastTSNE/blob/master/notes/notes.pdf, Section 3.2
-            if (iter < stop_lying_iter) {
+            if (iter < stop_lying_iter && stop_lying_iter != -1) {
                 C = C/early_exag_coeff - log(early_exag_coeff);
             }
-            if (iter >= start_late_exag_iter) {
+            if (iter >= start_late_exag_iter && start_late_exag_iter != -1) {
                 C = C/late_exag_coeff - log(late_exag_coeff);
             }     
 
