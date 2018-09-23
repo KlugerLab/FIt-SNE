@@ -20,7 +20,7 @@ The only prerequisite is [FFTW](http://www.fftw.org/), which can be downloaded a
 ```bash
     g++ -std=c++11 -O3  src/sptree.cpp src/tsne.cpp src/nbodyfft.cpp  -o bin/fast_tsne -pthread -lfftw3 -lm
 ```
-See [here](https://github.com/KlugerLab/FIt-SNE/issues/1) for solution to compilation errors relating to `clock_gettime`. See [here](https://github.com/KlugerLab/FIt-SNE/issues/35) for instructions in case one does not have `sudo` rights (one can install `FFTW` in the home directory and provide its path to `g++`).
+See [here](https://github.com/KlugerLab/FIt-SNE/issues/35) for instructions in case one does not have `sudo` rights (one can install `FFTW` in the home directory and provide its path to `g++`).
 
 Check out `examples/` for usage.
 
