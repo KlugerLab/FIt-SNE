@@ -9,7 +9,7 @@ t-Stochastic Neighborhood Embedding ([t-SNE](https://lvdmaaten.github.io/tsne/))
 
 Check out our [preprint](https://arxiv.org/abs/1712.09005) for more details and some benchmarks.
 
-R and Matlab wrappers are `fast_tsne.R` and `fast_tsne.m` respectively. [Gioele La Manno](https://twitter.com/GioeleLaManno) implemented a Python (Cython) wrapper, which is available on PyPI [here](https://pypi.python.org/pypi/fitsne).
+R, Matlab, and Python wrappers are `fast_tsne.R`, `fast_tsne.m`, and `fast_tsne.py` respectively. [Gioele La Manno](https://twitter.com/GioeleLaManno) implemented a Python (Cython) wrapper, which is available on PyPI [here](https://pypi.python.org/pypi/fitsne).
 
 ## Installation
 
@@ -20,7 +20,7 @@ The only prerequisite is [FFTW](http://www.fftw.org/), which can be downloaded a
 ```bash
     g++ -std=c++11 -O3  src/sptree.cpp src/tsne.cpp src/nbodyfft.cpp  -o bin/fast_tsne -pthread -lfftw3 -lm
 ```
-See [here](https://github.com/KlugerLab/FIt-SNE/issues/1) for solution to compilation errors relating to `clock_gettime`.
+See [here](https://github.com/KlugerLab/FIt-SNE/issues/35) for instructions in case one does not have `sudo` rights (one can install `FFTW` in the home directory and provide its path to `g++`).
 
 Check out `examples/` for usage.
 

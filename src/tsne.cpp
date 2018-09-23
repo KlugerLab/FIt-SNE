@@ -507,13 +507,22 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
                     C = evaluateError(row_P, col_P, val_P, Y, N, no_dims,theta, nthreads);
                 }
             }
-            costs[iter] = C;
-            if (iter > 0) {
-                std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
-                total_time += std::chrono::duration_cast<std::chrono::milliseconds>(now-start_time).count();
-                printf("Iteration %d (50 iterations in %.2f seconds), cost %f\n", iter, std::chrono::duration_cast<std::chrono::milliseconds>(now-start_time).count()/(float)1000.0, C);
-                start_time = std::chrono::steady_clock::now();
+            
+            // Adjusting the KL divergence if exaggeration is currently turned on
+            // See https://github.com/pavlin-policar/fastTSNE/blob/master/notes/notes.pdf, Section 3.2
+            if (iter < stop_lying_iter && stop_lying_iter != -1) {
+                C = C/early_exag_coeff - log(early_exag_coeff);
             }
+            if (iter >= start_late_exag_iter && start_late_exag_iter != -1) {
+                C = C/late_exag_coeff - log(late_exag_coeff);
+            }     
+
+            costs[iter] = C;       
+            
+            std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+            total_time += std::chrono::duration_cast<std::chrono::milliseconds>(now-start_time).count();
+            printf("Iteration %d (50 iterations in %.2f seconds), cost %f\n", iter, std::chrono::duration_cast<std::chrono::milliseconds>(now-start_time).count()/(float)1000.0, C);
+            start_time = std::chrono::steady_clock::now();
         }
     }
 
@@ -1330,7 +1339,7 @@ void TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_ro
     printf("Done building tree. Beginning nearest neighbor search... \n");
 
 
-    ProgressBar bar(N,70);
+    ProgressBar bar(N,60);
 
 
     if (nthreads == 0) {
@@ -1611,6 +1620,11 @@ bool TSNE::load_data(const char *data_path, double **data, double **Y, int *n,
 	result = fread(intervals_per_integer, sizeof(double),1,h);  // FFT parameter
 	result = fread(min_num_intervals, sizeof(int),1,h);         // FFT parameter
 
+    if((*nbody_algo == 2) && (*no_dims > 2)){
+        printf("FFT interpolation scheme supports only 1 or 2 output dimensions, not %d\n", *no_dims);
+        exit(1);
+    }
+
 	*data = (double*) malloc(*d * *n * sizeof(double));
 	if(*data == NULL) { printf("Memory allocation failed!\n"); exit(1); }
 	result = fread(*data, sizeof(double), *n * *d, h);          // the data
@@ -1638,8 +1652,9 @@ bool TSNE::load_data(const char *data_path, double **data, double **Y, int *n,
 
 	fclose(h);
 	printf("Read the following parameters:\n\t n %d by d %d dataset, theta %lf,\n"
-			"\t perplexity %lf, no_dims %d, max_iter %d,  stop_lying_iter %d,\n"
-			"\t K %d, sigma %lf, nbody_algo %d, knn_algo %d, early_exag_coeff %lf,\n"
+			"\t perplexity %lf, no_dims %d, max_iter %d,\n"
+			"\t stop_lying_iter %d, K %d, sigma %lf, nbody_algo %d,\n"
+			"\t knn_algo %d, early_exag_coeff %lf,\n"
 			"\t no_momentum_during_exag %d, n_trees %d, search_k %d,\n"
 			"\t start_late_exag_iter %d, late_exag_coeff %lf\n"
 			"\t nterms %d, interval_per_integer %lf, min_num_intervals %d\n",
