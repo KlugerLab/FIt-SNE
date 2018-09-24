@@ -664,14 +664,14 @@ void TSNE::computeFftGradientOneD(double *P, unsigned int *inp_row_P, unsigned i
 
         PARALLEL_FOR(nthreads, N, {
             double dim1 = 0;
-            for (unsigned int i = inp_row_P[n]; i < inp_row_P[n + 1]; i++) {
+            for (unsigned int i = inp_row_P[loop_i]; i < inp_row_P[loop_i + 1]; i++) {
                 // Compute pairwise distance and Q-value
                 unsigned int ind3 = inp_col_P[i];
-                double d_ij = Y[n] - Y[ind3];
+                double d_ij = Y[loop_i] - Y[ind3];
                 double q_ij = 1 / (1 + d_ij * d_ij);
                 dim1 += inp_val_P[i] * q_ij * d_ij;
             }
-                pos_f[n] = dim1;
+                pos_f[loop_i] = dim1;
 
         });
 
