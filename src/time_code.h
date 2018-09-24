@@ -9,7 +9,7 @@
                                                                
 #define END_TIME(LABEL) {          			\
                 std::chrono::steady_clock::time_point ENDVAR = std::chrono::steady_clock::now();      \
-                printf("%s: %lld ms\n",LABEL, std::chrono::duration_cast<std::chrono::milliseconds>(ENDVAR-STARTVAR).count());       \
+                printf("%s: %ld ms\n",LABEL, std::chrono::duration_cast<std::chrono::milliseconds>(ENDVAR-STARTVAR).count());       \
 }                                                                       
 #else 
 #define INITIALIZE_TIME                      
