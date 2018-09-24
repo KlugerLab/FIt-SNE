@@ -104,6 +104,9 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
               int nterms, double intervals_per_integer, int min_num_intervals, unsigned int nthreads, 
               int load_affinities, int perplexity_list_length, double *perplexity_list) {
 
+    if (nthreads == 0) {
+        nthreads = std::thread::hardware_concurrency();
+    }
     // Set random seed
     if (skip_random_init != true) {
         if (rand_seed >= 0) {
@@ -594,9 +597,6 @@ void TSNE::computeGradient(double *P, unsigned int *inp_row_P, unsigned int *inp
 void TSNE::computeFftGradientOneD(double *P, unsigned int *inp_row_P, unsigned int *inp_col_P, double *inp_val_P,
                                   double *Y, int N, int D, double *dC, int n_interpolation_points,
                                   double intervals_per_integer, int min_num_intervals, unsigned int nthreads) {
-    if (nthreads == 0) {
-        nthreads = std::thread::hardware_concurrency();
-    }
     // Zero out the gradient
     for (int i = 0; i < N * D; i++) dC[i] = 0.0;
 
@@ -662,36 +662,18 @@ void TSNE::computeFftGradientOneD(double *P, unsigned int *inp_row_P, unsigned i
 //    unsigned int ind2 = 0;
   double *pos_f = new double[N];
 
-    {
-        // Pre loop
-        std::vector<std::thread> threads(nthreads);
-        for (int t = 0; t < nthreads; t++) {
-            threads[t] = std::thread(std::bind(
-                    [&](const int bi, const int ei, const int t)
-                    {
-                        // loop over all items
-                        for(int n = bi;n<ei;n++)
-                        {
-                            // inner loop
-                            {
-                                double dim1 = 0;
-                                for (unsigned int i = inp_row_P[n]; i < inp_row_P[n + 1]; i++) {
-                                    // Compute pairwise distance and Q-value
-                                    unsigned int ind3 = inp_col_P[i];
-                                    double d_ij = Y[n] - Y[ind3];
-                                    double q_ij = 1 / (1 + d_ij * d_ij);
-                                    dim1 += inp_val_P[i] * q_ij * d_ij;
-                                }
-                                    pos_f[n] = dim1;
+        PARALLEL_FOR(nthreads, N, {
+            double dim1 = 0;
+            for (unsigned int i = inp_row_P[n]; i < inp_row_P[n + 1]; i++) {
+                // Compute pairwise distance and Q-value
+                unsigned int ind3 = inp_col_P[i];
+                double d_ij = Y[n] - Y[ind3];
+                double q_ij = 1 / (1 + d_ij * d_ij);
+                dim1 += inp_val_P[i] * q_ij * d_ij;
+            }
+                pos_f[n] = dim1;
 
-                            }
-                        }
-
-                    },t*N/nthreads,(t+1)==nthreads?N:(t+1)*N/nthreads,t));
-        }
-        std::for_each(threads.begin(),threads.end(),[](std::thread& x){x.join();});
-        // Post loop
-  }
+        });
 
 
 
@@ -718,10 +700,6 @@ void TSNE::computeFftGradient(double *P, unsigned int *inp_row_P, unsigned int *
                               int N, int D, double *dC, int n_interpolation_points, double intervals_per_integer,
                               int min_num_intervals, unsigned int nthreads) {
 
-
-    if (nthreads == 0) {
-        nthreads = std::thread::hardware_concurrency();
-    }
 
     // Zero out the gradient
     for (int i = 0; i < N * D; i++) dC[i] = 0.0;
@@ -1254,9 +1232,6 @@ int TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row
     }
     printf("Done building tree. Beginning nearest neighbor search... \n");
     ProgressBar bar(N,60);
-    if (nthreads == 0) {
-        nthreads = std::thread::hardware_concurrency();
-    }
     //const size_t nthreads = 1;
     {
         // Pre loop
@@ -1344,10 +1319,6 @@ void TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_ro
 
     ProgressBar bar(N,60);
 
-
-    if (nthreads == 0) {
-        nthreads = std::thread::hardware_concurrency();
-    }
     //const size_t nthreads = 1;
     {
         // Pre loop
