@@ -499,7 +499,7 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
         if (iter == mom_switch_iter) momentum = final_momentum;
 
         // Print out progress
-        if (iter > 0 && (iter % 50 == 0 || iter == max_iter - 1)) {
+        if ((iter+1) % 50 == 0 || iter == max_iter - 1) {
 	INITIALIZE_TIME;
         START_TIME;
             double C = .0;
@@ -523,12 +523,12 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
             }     
 
             costs[iter] = C;       
+    END_TIME("Computing Error");
             
             std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
             total_time += std::chrono::duration_cast<std::chrono::milliseconds>(now-start_time).count();
-            printf("Iteration %d (50 iterations in %.2f seconds), cost %f\n", iter, std::chrono::duration_cast<std::chrono::milliseconds>(now-start_time).count()/(float)1000.0, C);
+            printf("Iteration %d (50 iterations in %.2f seconds), cost %f\n", iter+1, std::chrono::duration_cast<std::chrono::milliseconds>(now-start_time).count()/(float)1000.0, C);
             start_time = std::chrono::steady_clock::now();
-    END_TIME("Computing Error");
         }
     }
 
