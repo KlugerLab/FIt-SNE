@@ -1,8 +1,3 @@
-import os
-import subprocess
-import struct
-import numpy as np
-
 # This is a really basic function that does not do almost any sanity checks
 #
 # It assumes that fast_tsne.py and fast_tsne binary are both located
@@ -12,6 +7,14 @@ import numpy as np
 #	from fast_tsne import fast_tsne
 #	X = np.random.randn(1000, 50)
 #	Z = fast_tsne(X, perplexity = 30)
+#
+# Written by Dmitry Kobak
+
+
+import os
+import subprocess
+import struct
+import numpy as np
 
 def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000, 
               stop_lying_iter=200, K=-1, sigma=-30, nbody_algo='FFT', knn_algo='annoy',
