@@ -24,9 +24,9 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
               seed=-1, initialization=None, load_affinities=None,
               perplexity_list=None):
 
-	# X should be a numpy array of 64-bit doubles
-	X = np.array(X).astype(float)
-    
+    # X should be a numpy array of 64-bit doubles
+    X = np.array(X).astype(float)
+
     if search_k is None:
         if perplexity > 0:
             search_k = 3 * perplexity * n_trees
@@ -88,7 +88,7 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
         f.write(struct.pack('=i', load_affinities))
 
         if initialization is not None:
-				initialization = np.array(initialization).astype(float)
+                initialization = np.array(initialization).astype(float)
                 f.write(initialization.tobytes()) 
                
     # run t-sne
