@@ -104,9 +104,6 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
               int nterms, double intervals_per_integer, int min_num_intervals, unsigned int nthreads, 
               int load_affinities, int perplexity_list_length, double *perplexity_list) {
 
-    if (nthreads == 0) {
-        nthreads = std::thread::hardware_concurrency();
-    }
     // Set random seed
     if (skip_random_init != true) {
         if (rand_seed >= 0) {
@@ -1710,6 +1707,9 @@ int main(int argc, char *argv[]) {
 	if(argc >= 4) {
 		nthreads = (unsigned int)strtoul(argv[3], (char **)NULL, 10);
 	}
+    if (nthreads == 0) {
+        nthreads = std::thread::hardware_concurrency();
+    }
 	std::cout<<"fast_tsne data_path: "<< data_path <<std::endl;
 	std::cout<<"fast_tsne result_path: "<< result_path <<std::endl;
 	std::cout<<"fast_tsne nthreads: "<< nthreads <<std::endl;
