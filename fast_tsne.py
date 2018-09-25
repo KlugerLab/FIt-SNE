@@ -3,8 +3,10 @@ import subprocess
 import struct
 import numpy as np
 
-# This is really basic function that does not do any sanity checks
-# It assumes that fast_tsne.py and fast_tsne binary are both in the working directory
+# This is a really basic function that does not do almost any sanity checks
+#
+# It assumes that fast_tsne.py and fast_tsne binary are both located
+# in the working directory.
 #
 # Usage example:
 #	from fast_tsne import fast_tsne
@@ -18,6 +20,9 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
               nterms=3, intervals_per_integer=1, min_num_intervals=50,            
               seed=-1, initialization=None, load_affinities=None,
               perplexity_list=None):
+
+	# X should be a numpy array of 64-bit doubles
+	X = np.array(X).astype(float)
     
     if search_k is None:
         if perplexity > 0:
@@ -80,6 +85,7 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
         f.write(struct.pack('=i', load_affinities))
 
         if initialization is not None:
+				initialization = np.array(initialization).astype(float)
                 f.write(initialization.tobytes()) 
                
     # run t-sne
