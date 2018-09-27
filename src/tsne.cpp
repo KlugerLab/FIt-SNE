@@ -98,8 +98,9 @@ void print_progress(int iter, double *Y, int N, int no_dims) {
 
 // Perform t-SNE
 int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity, double theta, int rand_seed,
-              bool skip_random_init, int max_iter, int stop_lying_iter, int mom_switch_iter, int K, double sigma,
-              int nbody_algorithm, int knn_algo, double early_exag_coeff, double *initialError, double *costs,
+              bool skip_random_init, int max_iter, int stop_lying_iter, int mom_switch_iter, 
+              double momentum, double final_momentum, double learning_rate, int K, double sigma,
+              int nbody_algorithm, int knn_algo, double early_exag_coeff, double *costs,
               bool no_momentum_during_exag, int start_late_exag_iter, double late_exag_coeff, int n_trees, int search_k,
               int nterms, double intervals_per_integer, int min_num_intervals, unsigned int nthreads, 
               int load_affinities, int perplexity_list_length, double *perplexity_list) {
@@ -126,25 +127,9 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
     } else {
         printf("Will use momentum during exaggeration phase\n");
     }
-    printf("Using no_dims = %d, max_iter = %d, perplexity = %f, theta = %f,\n"
-           "      K = %d, Sigma = %lf, knn_algo = %d, early_exag_coeff = %f,\n"
-           "      data[0] = %lf\n",
-           no_dims, max_iter, perplexity, theta, K, sigma, knn_algo,
-           early_exag_coeff, X[0]);
-
+    
     // Determine whether we are using an exact algorithm
     bool exact = theta == .0;
-
-    // Set learning parameters
-    float total_time = .0;
-
-
-
-
-    double momentum = .5, final_momentum = .8;
-
-    // Step size
-    double learning_rate = 200;
 
     // Allocate some memory
     auto *dY = (double *) malloc(N * no_dims * sizeof(double));
@@ -188,7 +173,7 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
 
 			FILE *h;
 			size_t result;
-			if ((h = fopen("temp/P.dat", "rb")) == NULL) {
+			if ((h = fopen("P.dat", "rb")) == NULL) {
 				printf("Error: could not open data file.\n");
 				return -2;
 			}
@@ -228,7 +213,7 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
 		if (load_affinities == 2) {
 			printf("Saving exact input similarities to file...\n");
 			FILE *h;
-			if ((h = fopen("temp/P.dat", "w+b")) == NULL) {
+			if ((h = fopen("P.dat", "w+b")) == NULL) {
 				printf("Error: could not open data file.\n");
 				return -2;
 			}
@@ -251,7 +236,7 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
 
 			FILE *h;
 			size_t result;
-			if ((h = fopen("temp/row_P.dat", "rb")) == NULL) {
+			if ((h = fopen("P_row.dat", "rb")) == NULL) {
 				printf("Error: could not open data file.\n");
 				return -2;
 			}
@@ -266,14 +251,14 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
 				exit(1);
 			}
 
-			if ((h = fopen("temp/val_P.dat", "rb")) == NULL) {
+			if ((h = fopen("P_val.dat", "rb")) == NULL) {
 				printf("Error: could not open data file.\n");
 				return -2;
 			}
 			result = fread(val_P, sizeof(double), numel, h);
 			fclose(h);
 
-			if ((h = fopen("temp/col_P.dat", "rb")) == NULL) {
+			if ((h = fopen("P_col.dat", "rb")) == NULL) {
 				printf("Error: could not open data file.\n");
 				return -2;
 			}
@@ -343,21 +328,21 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
 			int numel = row_P[N];
 
 			FILE *h;
-			if ((h = fopen("temp/val_P.dat", "w+b")) == NULL) {
+			if ((h = fopen("P_val.dat", "w+b")) == NULL) {
 				printf("Error: could not open data file.\n");
 				return -2;
 			}
 			fwrite(val_P, sizeof(double), numel, h);
 			fclose(h);
 
-			if ((h = fopen("temp/col_P.dat", "w+b")) == NULL) {
+			if ((h = fopen("P_col.dat", "w+b")) == NULL) {
 				printf("Error: could not open data file.\n");
 				return -2;
 			}
 			fwrite(col_P, sizeof(unsigned int), numel, h);
 			fclose(h);
 
-			if ((h = fopen("temp/row_P.dat", "w+b")) == NULL) {
+			if ((h = fopen("P_row.dat", "w+b")) == NULL) {
 				printf("Error: could not open data file.\n");
 				return -2;
 			}
@@ -523,7 +508,6 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
     END_TIME("Computing Error");
             
             std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
-            total_time += std::chrono::duration_cast<std::chrono::milliseconds>(now-start_time).count();
             printf("Iteration %d (50 iterations in %.2f seconds), cost %f\n", iter+1, std::chrono::duration_cast<std::chrono::milliseconds>(now-start_time).count()/(float)1000.0, C);
             start_time = std::chrono::steady_clock::now();
         }
@@ -1541,7 +1525,8 @@ double TSNE::randn() {
 // Note: this function does a malloc that should be freed elsewhere
 bool TSNE::load_data(const char *data_path, double **data, double **Y, int *n,
 	int *d, int *no_dims, double *theta, double *perplexity, int *rand_seed,
-	int *max_iter, int *stop_lying_iter, int *K, double *sigma,
+	int *max_iter, int *stop_lying_iter, int *mom_switch_iter, double* momentum, 
+    double* final_momentum, double* learning_rate, int *K, double *sigma,
 	int *nbody_algo, int *knn_algo, double *early_exag_coeff,
 	int *no_momentum_during_exag, int *n_trees, int *search_k,
 	int *start_late_exag_iter, double *late_exag_coeff, int *nterms,
@@ -1577,6 +1562,10 @@ bool TSNE::load_data(const char *data_path, double **data, double **Y, int *n,
 	result = fread(no_dims, sizeof(int), 1, h);                 // output dimensionality
 	result = fread(max_iter, sizeof(int),1,h);                  // maximum number of iterations
 	result = fread(stop_lying_iter, sizeof(int),1,h);           // when to stop early exaggeration
+	result = fread(mom_switch_iter, sizeof(int),1,h);           // when to switch the momentum value
+	result = fread(momentum, sizeof(double),1,h);               // initial momentum
+	result = fread(final_momentum, sizeof(double),1,h);         // final momentum
+	result = fread(learning_rate, sizeof(double),1,h);          // learning rate
 	result = fread(K, sizeof(int),1,h);                         // number of neighbours to compute
 	result = fread(sigma, sizeof(double),1,h);                  // input kernel width
 	result = fread(nbody_algo, sizeof(int),1,h);                // Barnes-Hut or FFT
@@ -1624,18 +1613,22 @@ bool TSNE::load_data(const char *data_path, double **data, double **Y, int *n,
 	fclose(h);
 	printf("Read the following parameters:\n\t n %d by d %d dataset, theta %lf,\n"
 			"\t perplexity %lf, no_dims %d, max_iter %d,\n"
-			"\t stop_lying_iter %d, K %d, sigma %lf, nbody_algo %d,\n"
+			"\t stop_lying_iter %d, mom_switch_iter %d,\n"
+            "\t momentum %lf, final_momentum %lf,\n"
+            "\t learning_rate %lf, K %d, sigma %lf, nbody_algo %d,\n"
 			"\t knn_algo %d, early_exag_coeff %lf,\n"
 			"\t no_momentum_during_exag %d, n_trees %d, search_k %d,\n"
 			"\t start_late_exag_iter %d, late_exag_coeff %lf\n"
 			"\t nterms %d, interval_per_integer %lf, min_num_intervals %d\n",
 			*n, *d, *theta, *perplexity,
 			*no_dims, *max_iter,*stop_lying_iter,
+            *mom_switch_iter, *momentum, *final_momentum, *learning_rate,
 			*K, *sigma, *nbody_algo, *knn_algo, *early_exag_coeff,
 			*no_momentum_during_exag, *n_trees, *search_k,
 			*start_late_exag_iter, *late_exag_coeff,
 			*nterms, *intervals_per_integer, *min_num_intervals);
-	printf("Read the %i x %i data matrix successfully.\n", *n, *d);
+
+	printf("Read the %i x %i data matrix successfully. X[0,0] = %lf\n", *n, *d, *data[0]);
 
     if(*perplexity == 0){
         printf("Read the list of perplexities: ");
@@ -1654,18 +1647,17 @@ bool TSNE::load_data(const char *data_path, double **data, double **Y, int *n,
 
 
 // Function that saves map to a t-SNE file
-void TSNE::save_data(const char *result_path, double* data, int* landmarks, double* costs, int n, int d, double initialError, int max_iter) {
+void TSNE::save_data(const char *result_path, double* data, double* costs, int n, int d, int max_iter) {
 	// Open file, write first 2 integers and then the data
 	FILE *h;
 	if((h = fopen(result_path, "w+b")) == NULL) {
 		printf("Error: could not open data file.\n");
 		return;
 	}
-	fwrite(&initialError, sizeof(double), 1, h);
 	fwrite(&n, sizeof(int), 1, h);
 	fwrite(&d, sizeof(int), 1, h);
 	fwrite(data, sizeof(double), n * d, h);
-	fwrite(landmarks, sizeof(int), n, h);
+	fwrite(&max_iter, sizeof(int), 1, h);
 	fwrite(costs, sizeof(double), max_iter, h);
 	fclose(h);
 	printf("Wrote the %i x %i data matrix successfully.\n", n, d);
@@ -1676,8 +1668,10 @@ int main(int argc, char *argv[]) {
 	printf("=============== t-SNE ===============\n");
 
 	// Define some variables
-	int origN, N, D, no_dims, max_iter, stop_lying_iter;
+	int N, D, no_dims, max_iter, stop_lying_iter;
 	int K, nbody_algo, knn_algo, no_momentum_during_exag;
+    int mom_switch_iter;
+    double momentum, final_momentum, learning_rate;
 	int n_trees, search_k, start_late_exag_iter;
 	double sigma, early_exag_coeff, late_exag_coeff;
 	double perplexity, theta, *data, *initial_data;
@@ -1695,8 +1689,8 @@ int main(int argc, char *argv[]) {
     double *perplexity_list;
     int perplexity_list_length;
 
-	data_path = "temp/data.dat";
-	result_path = "temp/result.dat";
+	data_path = "data.dat";
+	result_path = "result.dat";
 	nthreads = 0;
 	if(argc >= 2) {
 		data_path = argv[1];
@@ -1715,8 +1709,9 @@ int main(int argc, char *argv[]) {
 	std::cout<<"fast_tsne nthreads: "<< nthreads <<std::endl;
 
 	// Read the parameters and the dataset
-	if(tsne->load_data(data_path, &data, &Y, &origN, &D, &no_dims, &theta, &perplexity,
-				&rand_seed, &max_iter, &stop_lying_iter, &K,
+	if(tsne->load_data(data_path, &data, &Y, &N, &D, &no_dims, &theta, &perplexity,
+				&rand_seed, &max_iter, &stop_lying_iter, &mom_switch_iter, &momentum,
+                &final_momentum, &learning_rate, &K,
 				&sigma, &nbody_algo, &knn_algo,
 				&early_exag_coeff, &no_momentum_during_exag,
 				&n_trees, &search_k, &start_late_exag_iter,
@@ -1726,34 +1721,28 @@ int main(int argc, char *argv[]) {
 
 		bool no_momentum_during_exag_bool = true;
 		if (no_momentum_during_exag == 0) no_momentum_during_exag_bool = false;
-		// Make dummy landmarks
-		N = origN;
-		int* landmarks = (int*) malloc(N * sizeof(int));
-		if(landmarks == NULL) { printf("Memory allocation failed!\n"); exit(1); }
-		for(int n = 0; n < N; n++) landmarks[n] = n;
 
 		// Now fire up the SNE implementation
 		double* costs = (double*) calloc(max_iter, sizeof(double));
 		if(costs == NULL) { printf("Memory allocation failed!\n"); exit(1); }
-		double initialError;
 		int error_code = 0;
 		error_code = tsne->run(data, N, D, Y, no_dims, perplexity, theta, rand_seed, skip_random_init, max_iter, 
-				stop_lying_iter, 250, K, sigma, nbody_algo, knn_algo, early_exag_coeff, &initialError, 
-				costs, no_momentum_during_exag_bool, start_late_exag_iter, late_exag_coeff, n_trees,search_k, 
+				stop_lying_iter, mom_switch_iter, momentum, final_momentum, learning_rate, K, sigma, nbody_algo, knn_algo, 
+                early_exag_coeff, costs, no_momentum_during_exag_bool, start_late_exag_iter, late_exag_coeff, n_trees,search_k, 
 				nterms, intervals_per_integer, min_num_intervals, nthreads, load_affinities,
                 perplexity_list_length, perplexity_list);
+
 		if (error_code < 0) {
 			exit(error_code);
 		}
 
 		// Save the results
-		tsne->save_data(result_path, Y, landmarks, costs, N, no_dims, initialError, max_iter);
+		tsne->save_data(result_path, Y, costs, N, no_dims, max_iter);
 
 		// Clean up the memory
 		free(data); data = NULL;
 		free(Y); Y = NULL;
 		free(costs); costs = NULL;
-		free(landmarks); landmarks = NULL;
 	}
 	delete(tsne);
 
