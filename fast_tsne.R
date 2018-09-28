@@ -1,3 +1,8 @@
+# Note: this script should be sourced as: source('<path to file>', chdir=T)
+
+FAST_TSNE_SCRIPT_DIR <<-getwd() 
+ 
+cat(sprintf("FIt-SNE R wrapper loading.\nFIt-SNE root directory was set to %s\n",  FAST_TSNE_SCRIPT_DIR))
 fftRtsne <- function(X, 
 		     dims=2, perplexity=30, theta=0.5,
 		     check_duplicates=TRUE,
@@ -18,9 +23,9 @@ fftRtsne <- function(X,
 
 	if (is.null(fast_tsne_path)) {
 		if(.Platform$OS.type == "unix") {
-			fast_tsne_path = 'bin/fast_tsne'
+			fast_tsne_path = sprintf('%s/bin/fast_tsne', FAST_TSNE_SCRIPT_DIR )
 		} else {
-			fast_tsne_path = 'bin/FItSNE.exe'
+			fast_tsne_path = sprintf('%s/bin/FItSNE.exe', FAST_TSNE_SCRIPT_DIR)
 		}
 	}
 

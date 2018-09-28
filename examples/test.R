@@ -1,6 +1,6 @@
-# Note: this script should be run after setting the FIt-SNE directory as the current one (e.g. setwd())
+# Note: the chdir=T argument to source() is necessary if running FIt-SNE outside of the the root directory of FIt-SNE
 
-source('fast_tsne.R')
+source('fast_tsne.R', chdir=T)
 
 # Using Iris dataset
 
