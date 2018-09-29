@@ -302,7 +302,7 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
         error(cmdout);
     end
     toc
-    [mappedX, landmarks, costs, initialError] = read_data(max_iter);   
+    [mappedX,  costs] = read_data('result.dat', max_iter);   
     delete('data.dat');
     delete('result.dat');
 end
@@ -357,8 +357,8 @@ end
 
 
 % Reads the result file from the fast t-SNE implementation
-function [X, costs] = read_data(max_iter)
-    h = fopen('temp/result.dat', 'rb');
+function [X, costs] = read_data(file_name, max_iter)
+    h = fopen(file_name, 'rb');
 	n = fread(h, 1, 'integer*4');
 	d = fread(h, 1, 'integer*4');
 	X = fread(h, n * d, 'double');
