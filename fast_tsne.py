@@ -1,13 +1,11 @@
 # This is a really basic function that does not do almost any sanity checks
 #
-# It assumes that fast_tsne.py and fast_tsne binary are both located
-# in the working directory.
-#
 # Usage example:
-#	from fast_tsne import fast_tsne
+#	import sys; sys.path.append('../')
+#       from fast_tsne import fast_tsne
+#       import numpy as np
 #	X = np.random.randn(1000, 50)
 #	Z = fast_tsne(X, perplexity = 30)
-#
 # Written by Dmitry Kobak
 
 
