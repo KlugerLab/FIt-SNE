@@ -117,11 +117,35 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
     end
     
     if (~isfield(opts, 'stop_lying_iter'))
-        stop_lying_iter = 200;
+        stop_lying_iter = 250;
     else
         stop_lying_iter = opts.stop_lying_iter;
     end
-    
+
+    if (~isfield(opts, 'mom_switch_iter'))
+        mom_switch_iter = 250;
+    else
+        mom_switch_iter = opts.mom_switch_iter;
+    end
+
+    if (~isfield(opts, 'momentum'))
+        momentum = .5;
+    else
+        momentum = opts.momentum;
+    end
+
+    if (~isfield(opts, 'final_momentum'))
+        final_momentum = .8;
+    else
+        final_momentum = opts.final_momentum;
+    end
+
+    if (~isfield(opts, 'learning_rate'))
+        learning_rate = 200;
+    else
+        learning_rate = opts.learning_rate;
+    end
+
     if (~isfield(opts, 'max_iter'))
         max_iter = 1E3;
     else
@@ -254,7 +278,8 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
     
     X = double(X);
     
-    tsne_path = 'bin';
+    tsne_path = which('fast_tsne');
+    tsne_path = strcat(tsne_path(1:end-11), 'bin')
     
     % Compile t-SNE C code
     if(~exist(fullfile(tsne_path,'./fast_tsne'),'file') && isunix)
@@ -262,24 +287,24 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
     end
 
     % Run the fast diffusion SNE implementation
-    write_data('temp/data.dat', X, no_dims, theta, perplexity, max_iter, ...
+    write_data('data.dat', X, no_dims, theta, perplexity, max_iter, ...
         stop_lying_iter, K, sigma, nbody_algo, no_momentum_during_exag, knn_algo,...
         early_exag_coeff, n_trees, search_k, start_late_exag_iter, late_exag_coeff, rand_seed,...
         nterms, intervals_per_integer, min_num_intervals, initialization, load_affinities, ...
-        perplexity_list);
+        perplexity_list, mom_switch_iter, momentum, final_momentum, learning_rate);
 
     disp('Data written');
     tic
     %[flag, cmdout] = system(fullfile(tsne_path,'/fast_tsne'), '-echo');
-    cmd = sprintf('%s temp/data.dat temp/result.dat %d',fullfile(tsne_path,'/fast_tsne'), nthreads);
+    cmd = sprintf('%s data.dat result.dat %d',fullfile(tsne_path,'/fast_tsne'), nthreads);
     [flag, cmdout] = system(cmd, '-echo');
     if(flag~=0)
         error(cmdout);
     end
     toc
-    [mappedX, landmarks, costs, initialError] = read_data(max_iter);   
-    delete('temp/data.dat');
-    delete('temp/result.dat');
+    [mappedX,  costs] = read_data('result.dat', max_iter);   
+    delete('data.dat');
+    delete('result.dat');
 end
 
 
@@ -288,7 +313,7 @@ function write_data(filename, X, no_dims, theta, perplexity, max_iter,...
     stop_lying_iter, K, sigma, nbody_algo, no_momentum_during_exag, knn_algo,...
     early_exag_coeff, n_trees, search_k, start_late_exag_iter, late_exag_coeff, rand_seed,...
     nterms, intervals_per_integer, min_num_intervals, initialization, load_affinities, ...
-    perplexity_list)
+    perplexity_list, mom_switch_iter, momentum, final_momentum, learning_rate)
 
     [n, d] = size(X);
 
@@ -304,6 +329,10 @@ function write_data(filename, X, no_dims, theta, perplexity, max_iter,...
     fwrite(h, no_dims, 'integer*4');
     fwrite(h, max_iter, 'integer*4');
     fwrite(h, stop_lying_iter, 'integer*4');
+    fwrite(h, mom_switch_iter, 'integer*4');
+    fwrite(h, momentum, 'double');
+    fwrite(h, final_momentum, 'double');
+    fwrite(h, learning_rate, 'double');
     fwrite(h, K, 'int');
     fwrite(h, sigma, 'double');
     fwrite(h, nbody_algo, 'int');
@@ -328,15 +357,13 @@ end
 
 
 % Reads the result file from the fast t-SNE implementation
-function [X, landmarks, costs, initialError] = read_data(max_iter)
-    h = fopen('temp/result.dat', 'rb');
-    initialError = fread(h, 1, 'double');
+function [X, costs] = read_data(file_name, max_iter)
+    h = fopen(file_name, 'rb');
 	n = fread(h, 1, 'integer*4');
 	d = fread(h, 1, 'integer*4');
 	X = fread(h, n * d, 'double');
-    landmarks = fread(h, n, 'integer*4');
-    costs = fread(h, max_iter, 'double');      % this vector contains only zeros
-    
+    max_iter = fread(h, 1, 'integer*4');
+    costs = fread(h, max_iter, 'double');     
     X = reshape(X, [d n])';
 	fclose(h);
 end

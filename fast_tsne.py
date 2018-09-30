@@ -1,13 +1,11 @@
 # This is a really basic function that does not do almost any sanity checks
 #
-# It assumes that fast_tsne.py and fast_tsne binary are both located
-# in the working directory.
-#
 # Usage example:
-#	from fast_tsne import fast_tsne
+#	import sys; sys.path.append('../')
+#       from fast_tsne import fast_tsne
+#       import numpy as np
 #	X = np.random.randn(1000, 50)
 #	Z = fast_tsne(X, perplexity = 30)
-#
 # Written by Dmitry Kobak
 
 
@@ -17,7 +15,8 @@ import struct
 import numpy as np
 
 def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000, 
-              stop_lying_iter=200, K=-1, sigma=-30, nbody_algo='FFT', knn_algo='annoy',
+              stop_lying_iter=250, K=-1, sigma=-30, nbody_algo='FFT', knn_algo='annoy',
+              mom_switch_iter=250, momentum=.5, final_momentum=.8, learning_rate=200,
               early_exag_coeff=12, no_momentum_during_exag=0, n_trees=50, 
               search_k=None, start_late_exag_iter=-1, late_exag_coeff=-1,
               nterms=3, intervals_per_integer=1, min_num_intervals=50,            
@@ -52,12 +51,8 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
     else:
         load_affinities = 0
     
-    # create temp directory if it does not exist
-    if not os.path.isdir(os.getcwd()+'/temp'):
-        os.mkdir(os.getcwd()+'/temp')
-    
     # write data file
-    with open(os.getcwd()+'/temp/data.dat', 'wb') as f:
+    with open(os.getcwd() + '/data.dat', 'wb') as f:
         n, d = X.shape
         f.write(struct.pack('=i', n))   
         f.write(struct.pack('=i', d))   
@@ -70,6 +65,10 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
         f.write(struct.pack('=i', map_dims))
         f.write(struct.pack('=i', max_iter))
         f.write(struct.pack('=i', stop_lying_iter))
+        f.write(struct.pack('=i', mom_switch_iter))
+        f.write(struct.pack('=d', momentum))
+        f.write(struct.pack('=d', final_momentum))
+        f.write(struct.pack('=d', learning_rate))
         f.write(struct.pack('=i', K))
         f.write(struct.pack('=d', sigma))
         f.write(struct.pack('=i', nbody_algo))
@@ -92,11 +91,10 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
                 f.write(initialization.tobytes()) 
                
     # run t-sne
-    subprocess.call(os.getcwd()+'/fast_tsne')
+    subprocess.call(os.path.dirname(os.path.realpath(__file__)) + '/bin/fast_tsne')
             
     # read data file
-    with open(os.getcwd()+'/temp/result.dat', 'rb') as f:
-        initError, = struct.unpack('=d', f.read(8))
+    with open(os.getcwd()+'/result.dat', 'rb') as f:
         n, = struct.unpack('=i', f.read(4))  
         md, = struct.unpack('=i', f.read(4)) 
         sz = struct.calcsize('=d')

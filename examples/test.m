@@ -1,4 +1,5 @@
-% NOTE: this script should be run with FIt-SNE directory set as current
+% This should be the path to the FIt-SNE folder where fast_tsne.m is located
+addpath('../')
 
 % Generate a toy dataset
 

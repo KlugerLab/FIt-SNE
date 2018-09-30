@@ -1,3 +1,8 @@
+# Note: this script should be sourced as: source('<path to file>', chdir=T)
+
+FAST_TSNE_SCRIPT_DIR <<-getwd() 
+ 
+cat(sprintf("FIt-SNE R wrapper loading.\nFIt-SNE root directory was set to %s\n",  FAST_TSNE_SCRIPT_DIR))
 fftRtsne <- function(X, 
 		     dims=2, perplexity=30, theta=0.5,
 		     check_duplicates=TRUE,
@@ -7,6 +12,7 @@ fftRtsne <- function(X,
 		     stop_lying_iter=250,
 		     exaggeration_factor=12.0, no_momentum_during_exag=FALSE,
 		     start_late_exag_iter=-1.0,late_exag_coeff=1.0,
+             mom_switch_iter=250, momentum=.5, final_momentum=.8, learning_rate=200,
 		     n_trees=50, search_k = -1,rand_seed=-1,
 		     nterms=3, intervals_per_integer=1, min_num_intervals=50, 
 		     K=-1, sigma=-30, initialization=NULL,
@@ -17,9 +23,9 @@ fftRtsne <- function(X,
 
 	if (is.null(fast_tsne_path)) {
 		if(.Platform$OS.type == "unix") {
-			fast_tsne_path='bin/fast_tsne'
+			fast_tsne_path = sprintf('%s/bin/fast_tsne', FAST_TSNE_SCRIPT_DIR )
 		} else {
-			fast_tsne_path='bin/FItSNE.exe'
+			fast_tsne_path = sprintf('%s/bin/FItSNE.exe', FAST_TSNE_SCRIPT_DIR)
 		}
 	}
 
@@ -97,6 +103,10 @@ fftRtsne <- function(X,
 	writeBin( as.integer(dims), f,size=4) #theta
 	writeBin( as.integer(max_iter),f,size=4)
 	writeBin( as.integer(stop_lying_iter),f,size=4)
+	writeBin( as.integer(mom_switch_iter),f,size=4)
+	writeBin( as.numeric(momentum),f,size=8)
+	writeBin( as.numeric(final_momentum),f,size=8)
+	writeBin( as.numeric(learning_rate),f,size=8)
 	writeBin( as.integer(K),f,size=4) #K
 	writeBin( as.numeric(sigma), f,size=8) #sigma
 	writeBin( as.integer(nbody_algo), f,size=4)  #not barnes hut
@@ -123,13 +133,11 @@ fftRtsne <- function(X,
 		stop('tsne call failed');
 	}
 	f <- file(result_path, "rb")
-	initialError <- readBin(f, integer(), n=1, size=8);
 	n <- readBin(f, integer(), n=1, size=4);
-	d <- readBin(f, integer(), n=1,size=4);
+	d <- readBin(f, integer(), n=1, size=4);
 	Y <- readBin(f, numeric(), n=n*d);
         Y <- t(matrix(Y, nrow=d));
         if (get_costs ) {
-            landmarks <- readBin(f, numeric(), n=n,size=4);
             costs <- readBin(f, numeric(), n=max_iter,size=8);
             Yout <- list( Y=Y, costs=costs);
         }else {
