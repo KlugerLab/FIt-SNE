@@ -300,7 +300,7 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
 				int error_code = 0;
 				error_code = computeGaussianPerplexity(X, N, D, &row_P, &col_P, &val_P, perplexity, K_to_use,
 													   sigma_to_use, n_trees, search_k, nthreads,
-                                                       perplexity_list_length, perplexity_list);
+                                                       perplexity_list_length, perplexity_list, rand_seed);
 				if (error_code < 0) return error_code;
 			} else if (knn_algo == 2) {
 				printf("Using VP trees for nearest neighbor search\n");
@@ -1172,7 +1172,7 @@ void TSNE::computeGaussianPerplexity(double *X, int N, int D, double *P, double 
 int TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row_P, unsigned int **_col_P,
                                     double **_val_P, double perplexity, int K, double sigma, int num_trees, 
                                     int search_k, unsigned int nthreads, int perplexity_list_length, 
-                                    double *perplexity_list) {
+                                    double *perplexity_list, int rand_seed) {
 
     if(perplexity > K) printf("Perplexity should be lower than K!\n");
 
@@ -1190,6 +1190,12 @@ int TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row
 
     printf("Building Annoy tree...\n");
     AnnoyIndex<int, double, Euclidean, Kiss32Random> tree = AnnoyIndex<int, double, Euclidean, Kiss32Random>(D);
+
+    if (rand_seed > 0)
+    {
+        tree.set_seed(rand_seed);
+    }
+
     for(int i=0; i<N; ++i){
         double *vec = (double *) malloc( D * sizeof(double) );
 
