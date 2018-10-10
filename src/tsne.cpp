@@ -1111,8 +1111,8 @@ double TSNE::distances2similarities(double *D, double *P, int N, int n, double p
 double TSNE::distances2similarities(double *D, double *P, int N, int n, double perplexity, double sigma, bool ifSquared, 
                                     int perplexity_list_length, double *perplexity_list)  {
 
-    // if perplexity > 0 then defaulting to using this perplexity
-    if (perplexity > 0) {
+    // if perplexity != 0 then defaulting to using this perplexity (or fixed sigma)
+    if (perplexity != 0) {
         double beta = distances2similarities(D, P, N, n, perplexity, sigma, true);
         return beta;
     }
