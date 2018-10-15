@@ -15,7 +15,7 @@ import struct
 import numpy as np
 
 def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000, 
-              stop_lying_iter=250, K=-1, sigma=-1, nbody_algo='FFT', knn_algo='annoy',
+              stop_early_exag_iter=250, K=-1, sigma=-1, nbody_algo='FFT', knn_algo='annoy',
               mom_switch_iter=250, momentum=.5, final_momentum=.8, learning_rate=200,
               early_exag_coeff=12, no_momentum_during_exag=0, n_trees=50, 
               search_k=None, start_late_exag_iter=-1, late_exag_coeff=-1,
@@ -25,6 +25,12 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
 
     # X should be a numpy array of 64-bit doubles
     X = np.array(X).astype(float)
+
+    if perplexity_list is not None:
+        perplexity = 0                # C++ requires perplexity=0 in order to use perplexity_list
+
+    if sigma > 0 and K > 0:
+        perplexity = -1               # C++ requires perplexity=-1 in order to use sigma
 
     if search_k is None:
         if perplexity > 0:
@@ -50,12 +56,6 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
         load_affinities = 2
     else:
         load_affinities = 0
-
-    if perplexity_list is not None:
-        perplexity = 0
-
-	if sigma > 0 and K > 0:
-		perplexity = -1
     
     # write data file
     with open(os.getcwd() + '/data.dat', 'wb') as f:
@@ -70,7 +70,7 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
                 f.write(struct.pack('=d', perpl))
         f.write(struct.pack('=i', map_dims))
         f.write(struct.pack('=i', max_iter))
-        f.write(struct.pack('=i', stop_lying_iter))
+        f.write(struct.pack('=i', stop_early_exag_iter))
         f.write(struct.pack('=i', mom_switch_iter))
         f.write(struct.pack('=d', momentum))
         f.write(struct.pack('=d', final_momentum))
