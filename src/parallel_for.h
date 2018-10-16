@@ -1,6 +1,7 @@
 #ifndef PARALLEL_FOR_H
 #define PARALLEL_FOR_H
 #include<algorithm>
+#include <functional>
 #include <thread>
 #include <vector>
 #if defined(_OPENMP)
