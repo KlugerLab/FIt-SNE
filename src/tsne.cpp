@@ -1091,7 +1091,7 @@ double TSNE::distances2similarities(double *D, double *P, int N, int n, double p
         }
     }else{
         // Using fixed kernel width: no iterations needed
-        beta = 1/sigma;
+        beta = 1/(2*sigma*sigma);
         for(int m = 0; m < N; m++) P[m] = exp(-beta * (ifSquared ? D[m] : D[m]*D[m]));
         if (n >= 0) P[n] = DBL_MIN;
 
