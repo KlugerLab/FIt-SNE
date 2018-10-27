@@ -6,7 +6,7 @@ addpath('../')
 dim = 3;
 sigma_0 = .0001;
 cluster_num = 2;
-cluster_size = 1E3;
+cluster_size = 1E4;
 
 X_clusters = [];
 col_clusters = repmat(1:cluster_num,cluster_size,1);
@@ -26,12 +26,7 @@ title('Original Data')
 % Run t-SNE
 
 clear opts
-opts.stop_lying_iter = 2E2;
 opts.max_iter = 400;
-opts.start_late_exag_iter = 300;
-opts.late_exag_coeff = 6;
-opts.rand_seed = -1;
-
 cluster_firstphase = fast_tsne(X_clusters, opts);
 
 subplot(122)

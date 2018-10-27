@@ -9,7 +9,7 @@ fftRtsne <- function(X,
 		     max_iter=1000,
 		     fft_not_bh = TRUE,
 		     ann_not_vptree = TRUE,
-		     stop_lying_iter=250,
+		     stop_early_exag_iter=250,
 		     exaggeration_factor=12.0, no_momentum_during_exag=FALSE,
 		     start_late_exag_iter=-1.0,late_exag_coeff=1.0,
              mom_switch_iter=250, momentum=.5, final_momentum=.8, learning_rate=200,
@@ -49,7 +49,7 @@ fftRtsne <- function(X,
 	if (nrow(X) - 1 < 3 * perplexity) { stop("Perplexity is too large.")}
 	if (!is.matrix(X)) { stop("Input X is not a matrix")}
 	if (!(max_iter>0)) { stop("Incorrect number of iterations.")}
-	if (!is.wholenumber(stop_lying_iter) || stop_lying_iter<0) { stop("stop_lying_iter should be a positive integer")}
+	if (!is.wholenumber(stop_early_exag_iter) || stop_early_exag_iter<0) { stop("stop_early_exag_iter should be a positive integer")}
 	if (!is.numeric(exaggeration_factor)) { stop("exaggeration_factor should be numeric")}
 	if (!is.wholenumber(dims) || dims<=0) { stop("Incorrect dimensionality.")}
 	if (search_k == -1) {
@@ -102,7 +102,7 @@ fftRtsne <- function(X,
 
 	writeBin( as.integer(dims), f,size=4) #theta
 	writeBin( as.integer(max_iter),f,size=4)
-	writeBin( as.integer(stop_lying_iter),f,size=4)
+	writeBin( as.integer(stop_early_exag_iter),f,size=4)
 	writeBin( as.integer(mom_switch_iter),f,size=4)
 	writeBin( as.numeric(momentum),f,size=8)
 	writeBin( as.numeric(final_momentum),f,size=8)
