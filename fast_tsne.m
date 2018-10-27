@@ -23,8 +23,8 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
 %                        set to be 'vptree' for vp-trees
 %                   opts.early_exag_coeff - coefficient for early exaggeration
 %                       (>1). Default 12.
-%                   opts.stop_lying_iter - When to switch off early exaggeration.
-%                       Default 200.
+%                   opts.stop_early_exag_iter - When to switch off early exaggeration.
+%                       Default 250.
 %                   opts.start_late_exag_iter - When to start late
 %                       exaggeration. set to -1 to not use late exaggeration
 %                       Default -1.
@@ -116,10 +116,10 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
         theta = opts.theta;
     end
     
-    if (~isfield(opts, 'stop_lying_iter'))
+    if (~isfield(opts, 'stop_early_exag_iter'))
         stop_lying_iter = 250;
     else
-        stop_lying_iter = opts.stop_lying_iter;
+        stop_lying_iter = opts.stop_early_exag_iter;
     end
 
     if (~isfield(opts, 'mom_switch_iter'))
