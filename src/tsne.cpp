@@ -1671,7 +1671,7 @@ void TSNE::save_data(const char *result_path, double* data, double* costs, int n
 
 
 int main(int argc, char *argv[]) {
-	printf("=============== t-SNE ===============\n");
+	printf("=============== t-SNE v1.0.0 ===============\n");
 
 	// Define some variables
 	int N, D, no_dims, max_iter, stop_lying_iter;
