@@ -105,17 +105,6 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
               int nterms, double intervals_per_integer, int min_num_intervals, unsigned int nthreads, 
               int load_affinities, int perplexity_list_length, double *perplexity_list) {
 
-    // Set random seed
-    if (skip_random_init != true) {
-        if (rand_seed >= 0) {
-            printf("Using random seed: %d\n", rand_seed);
-            srand((unsigned int) rand_seed);
-        } else {
-            printf("Using current time as random seed...\n");
-            srand(time(NULL));
-        }
-    }
-
     // Some logging messages
     if (N - 1 < 3 * perplexity) {
         printf("Perplexity too large for the number of data points!\n");
@@ -358,10 +347,22 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
 		}
 	}
 
+    // Set random seed
+    if (skip_random_init != true) {
+        if (rand_seed >= 0) {
+            printf("Using random seed: %d\n", rand_seed);
+            srand((unsigned int) rand_seed);
+        } else {
+            printf("Using current time as random seed...\n");
+            srand(time(NULL));
+        }
+    }
+
     // Initialize solution (randomly)
     if (skip_random_init != true) {
 		printf("Randomly initializing the solution.\n");
         for (int i = 0; i < N * no_dims; i++) Y[i] = randn() * .0001;
+	printf("Y[0] = %lf\n", Y[0]);
     } else {
 		printf("Using the given initialization.\n");
     }
@@ -1671,7 +1672,7 @@ void TSNE::save_data(const char *result_path, double* data, double* costs, int n
 
 
 int main(int argc, char *argv[]) {
-	printf("=============== t-SNE v1.0.0 ===============\n");
+	printf("=============== t-SNE v1.0.1 ===============\n");
 
 	// Define some variables
 	int N, D, no_dims, max_iter, stop_lying_iter;
