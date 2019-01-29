@@ -283,7 +283,7 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
     
     % Compile t-SNE C code
     if(~exist(fullfile(tsne_path,'./fast_tsne'),'file') && isunix)
-        system(sprintf('g++ -std=c++11 -O3  src/sptree.cpp src/tsne.cpp src/nbodyfft.cpp  -o fast_tsne -pthread -lfftw3 -lm'));
+ 	system(sprintf('g++ -std=c++11 -O3  src/sptree.cpp src/tsne.cpp src/nbodyfft.cpp  -o bin/fast_tsne -pthread -lfftw3 -lm'));    end
     end
     
     % Compile t-SNE C code on Windows
