@@ -12,11 +12,11 @@ using namespace std;
 
 typedef double (*kernel_type)(double, double);
 
-typedef double (*kernel_type_2d)(double, double, double, double);
+typedef double (*kernel_type_2d)(double, double, double, double, double);
 
 void precompute_2d(double x_max, double x_min, double y_max, double y_min, int n_boxes, int n_interpolation_points,
                    kernel_type_2d kernel, double *box_lower_bounds, double *box_upper_bounds, double *y_tilde_spacings,
-                   double *y_tilde, double *x_tilde, complex<double> *fft_kernel_tilde);
+                   double *y_tilde, double *x_tilde, complex<double> *fft_kernel_tilde, double df);
 
 void n_body_fft_2d(int N, int n_terms, double *xs, double *ys, double *chargesQij, int n_boxes,
                    int n_interpolation_points, double *box_lower_bounds, double *box_upper_bounds,

@@ -21,7 +21,7 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
               search_k=None, start_late_exag_iter=-1, late_exag_coeff=-1,
               nterms=3, intervals_per_integer=1, min_num_intervals=50,            
               seed=-1, initialization=None, load_affinities=None,
-              perplexity_list=None):
+              perplexity_list=None, df=1):
 
     # X should be a numpy array of 64-bit doubles
     X = np.array(X).astype(float)
@@ -90,6 +90,7 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
         f.write(struct.pack('=i', min_num_intervals))
         f.write(X.tobytes()) 
         f.write(struct.pack('=i', seed))
+        f.write(struct.pack('=d', df))
         f.write(struct.pack('=i', load_affinities))
 
         if initialization is not None:

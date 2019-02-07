@@ -19,7 +19,7 @@ fftRtsne <- function(X,
 		     data_path=NULL, result_path=NULL,
 		     load_affinities=NULL,
 		     fast_tsne_path=NULL, nthreads=0, perplexity_list = NULL, 
-                     get_costs = FALSE, ... ) {
+                     get_costs = FALSE, df = 1.0,... ) {
 
 	if (is.null(fast_tsne_path)) {
 		if(.Platform$OS.type == "unix") {
@@ -51,6 +51,7 @@ fftRtsne <- function(X,
 	if (!(max_iter>0)) { stop("Incorrect number of iterations.")}
 	if (!is.wholenumber(stop_early_exag_iter) || stop_early_exag_iter<0) { stop("stop_early_exag_iter should be a positive integer")}
 	if (!is.numeric(exaggeration_factor)) { stop("exaggeration_factor should be numeric")}
+	if (!is.numeric(df)) { stop("df should be numeric")}
 	if (!is.wholenumber(dims) || dims<=0) { stop("Incorrect dimensionality.")}
 	if (search_k == -1) {
        if (perplexity>0) {
@@ -124,8 +125,10 @@ fftRtsne <- function(X,
 	tX = c(t(X))
 	writeBin( tX, f) 
 	writeBin( as.integer(rand_seed), f,size=4) 
+        writeBin(as.numeric(df), f, size=8)
 	writeBin( as.integer(load_affinities), f,size=4) 
 	if (! is.null(initialization)){ writeBin( c(t(initialization)), f) }		
+        print(df)
 	close(f) 
 
 	flag= system2(command=fast_tsne_path, args=c(data_path, result_path, nthreads));
