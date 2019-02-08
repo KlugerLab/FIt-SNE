@@ -63,6 +63,11 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
 %
 %                   opts.perplexity_list - if perplexity==0 then perplexity combination will
 %                        be used with values taken from perplexity_list. Default: []
+%                   opts.df - Degree of freedom of t-distribution, must be greater than 0.
+%                        Values smaller than 1 correspond to heavier tails, which can often 
+%                        resolve substructure in the embedding. See Kobak et al. (2019) for
+%                        details. Default is 1.0
+
 
 
 % Runs the C++ implementation of fast t-SNE using either the IFt-SNE

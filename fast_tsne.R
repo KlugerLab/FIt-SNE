@@ -3,6 +3,70 @@
 FAST_TSNE_SCRIPT_DIR <<-getwd() 
  
 cat(sprintf("FIt-SNE R wrapper loading.\nFIt-SNE root directory was set to %s\n",  FAST_TSNE_SCRIPT_DIR))
+# Compute FIt-SNE of a dataset
+#       dims - dimensionality of the embedding. Default 2.
+#       perplexity - perplexity is used to determine the
+#           bandwidth of the Gaussian kernel in the input
+#           space.  Default 30.
+#       theta - Set to 0 for exact.  If non-zero, then will use either
+#           Barnes Hut or FIt-SNE based on nbody_algo.  If Barnes Hut, then
+#           this determins the accuracy of BH approximation.
+#           Default 0.5.
+#       max_iter - Number of iterations of t-SNE to run.
+#           Default 1000.
+#       fft_not_bh - if theta is nonzero, this determins whether to
+#            use FIt-SNE or Barnes Hut approximation. Default is FIt-SNE.
+#            set to be True for FIt-SNE
+#       ann_not_vptree - use vp-trees (as in bhtsne) or approximate nearest neighbors (default).
+#            set to be True for approximate nearest neighbors
+#       exaggeration_factor - coefficient for early exaggeration
+#           (>1). Default 12.
+#       no_momentum_during_exag - Set to 0 to use momentum
+#           and other optimization tricks. 1 to do plain,vanilla
+#           gradient descent (useful for testing large exaggeration
+#           coefficients)
+#       stop_early_exag_iter - When to switch off early exaggeration.
+#           Default 250.
+#       start_late_exag_iter - When to start late
+#           exaggeration. set to -1 to not use late exaggeration
+#           Default -1.
+#       late_exag_coeff - Late exaggeration coefficient.
+#          Set to -1 to not use late exaggeration.
+#           Default -1
+#       nterms - If using FIt-SNE, this is the number of
+#                      interpolation points per sub-interval
+#       intervals_per_integer - See min_num_intervals              
+#       min_num_intervals - Let maxloc = ceil(max(max(X)))
+#           and minloc = floor(min(min(X))). i.e. the points are in
+#           a [minloc]^no_dims by [maxloc]^no_dims interval/square.
+#           The number of intervals in each dimension is either
+#           min_num_intervals or ceil((maxloc -
+#           minloc)/intervals_per_integer), whichever is
+#           larger. min_num_intervals must be an integer >0,
+#           and intervals_per_integer must be >0. Default:
+#           min_num_intervals=50, intervals_per_integer =
+#           1
+#
+#       sigma - Fixed sigma value to use when perplexity==-1
+#            Default -1 (None)
+#       K - Number of nearest neighbours to get when using fixed sigma
+#            Default -30 (None)
+#
+#       initialization - N x no_dims array to intialize the solution
+#            Default: None
+#
+#       load_affinities - 
+#            If 1, input similarities are loaded from a file and not computed
+#            If 2, input similarities are saved into a file.
+#            If 0, affinities are neither saved nor loaded
+#
+#       perplexity_list - if perplexity==0 then perplexity combination will
+#            be used with values taken from perplexity_list. Default: NULL
+#       df - Degree of freedom of t-distribution, must be greater than 0.
+#       Values smaller than 1 correspond to heavier tails, which can often 
+#       resolve substructure in the embedding. See Kobak et al. (2019) for
+#       details. Default is 1.0
+#
 fftRtsne <- function(X, 
 		     dims=2, perplexity=30, theta=0.5,
 		     check_duplicates=TRUE,
