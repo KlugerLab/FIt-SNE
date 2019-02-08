@@ -124,7 +124,7 @@ fftRtsne <- function(X,
        } else if (perplexity==0) {
           search_k = n_trees*max(perplexity_list)*3
        } else { 
-          search_k = n_trees*K*3
+          search_k = n_trees*K
        }
     }
 
