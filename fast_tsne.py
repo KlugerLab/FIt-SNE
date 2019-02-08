@@ -2,10 +2,11 @@
 #
 # Usage example:
 #	import sys; sys.path.append('../')
-#       from fast_tsne import fast_tsne
-#       import numpy as np
+#   from fast_tsne import fast_tsne
+#   import numpy as np
 #	X = np.random.randn(1000, 50)
 #	Z = fast_tsne(X, perplexity = 30)
+#
 # Written by Dmitry Kobak
 
 
@@ -21,7 +22,7 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
               search_k=None, start_late_exag_iter=-1, late_exag_coeff=-1,
               nterms=3, intervals_per_integer=1, min_num_intervals=50,            
               seed=-1, initialization=None, load_affinities=None,
-              perplexity_list=None, df=1):
+              perplexity_list=None, df=1, return_loss=False, nthreads=0):
 
     # X should be a numpy array of 64-bit doubles
     X = np.array(X).astype(float)
@@ -98,15 +99,26 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
                 f.write(initialization.tobytes()) 
                
     # run t-sne
-    subprocess.call(os.path.dirname(os.path.realpath(__file__)) + '/bin/fast_tsne')
+    subprocess.call([os.path.dirname(os.path.realpath(__file__)) + 
+        '/bin/fast_tsne', 'data.dat', 'result.dat', '{}'.format(nthreads)])
             
     # read data file
     with open(os.getcwd()+'/result.dat', 'rb') as f:
         n, = struct.unpack('=i', f.read(4))  
         md, = struct.unpack('=i', f.read(4)) 
         sz = struct.calcsize('=d')
-        buf = f.read()
+        buf = f.read(sz*n*md)
         x_tsne = [struct.unpack_from('=d', buf, sz*offset) for offset in range(n*md)]
         x_tsne = np.array(x_tsne).reshape((n,md))
+        _, = struct.unpack('=i', f.read(4))  
+        buf = f.read(sz*max_iter)
+        loss = [struct.unpack_from('=d', buf, sz*offset) for offset in range(max_iter)]
+        loss = np.array(loss).squeeze()
+        loss[np.arange(1,max_iter+1)%50>0] = np.nan
 
-    return x_tsne
+    if return_loss:
+        return (x_tsne, loss)
+    else:
+        return x_tsne
+
+
