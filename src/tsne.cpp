@@ -1871,13 +1871,14 @@ void TSNE::save_data(const char *result_path, double* data, double* costs, int n
 
 
 int main(int argc, char *argv[]) {
-	printf("=============== t-SNE v1.0.1 ===============\n");
+        const char version_number[] =  "1.1.0";
+	printf("=============== t-SNE v%s ===============\n", version_number);
 
 	// Define some variables
 	int N, D, no_dims, max_iter, stop_lying_iter;
 	int K, nbody_algo, knn_algo, no_momentum_during_exag;
-    int mom_switch_iter;
-    double momentum, final_momentum, learning_rate;
+        int mom_switch_iter;
+        double momentum, final_momentum, learning_rate;
 	int n_trees, search_k, start_late_exag_iter;
 	double sigma, early_exag_coeff, late_exag_coeff;
 	double perplexity, theta, *data, *initial_data;
@@ -1899,13 +1900,23 @@ int main(int argc, char *argv[]) {
 	data_path = "data.dat";
 	result_path = "result.dat";
 	nthreads = 0;
-	if(argc >= 2) {
-		data_path = argv[1];
-	}
+        if (argc >=2 ) {
+            if ( strcmp(argv[1],version_number)) {
+                std::cout<<"Wrapper passed wrong version number: "<< argv[1] <<std::endl;
+                exit(-1);
+            }
+        }else{
+                std::cout<<"Please pass version number as first argument." <<std::endl;
+                exit(-1);
+            
+        }
 	if(argc >= 3) {
-		result_path = argv[2];
+		data_path = argv[2];
 	}
 	if(argc >= 4) {
+		result_path = argv[3];
+	}
+	if(argc >= 5) {
 		nthreads = (unsigned int)strtoul(argv[3], (char **)NULL, 10);
 	}
     if (nthreads == 0) {

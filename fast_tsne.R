@@ -20,6 +20,7 @@ fftRtsne <- function(X,
 		     load_affinities=NULL,
 		     fast_tsne_path=NULL, nthreads=0, perplexity_list = NULL, 
                      get_costs = FALSE, df = 1.0,... ) {
+        version_number = '1.1.0'
 
 	if (is.null(fast_tsne_path)) {
 		if(.Platform$OS.type == "unix") {
@@ -131,7 +132,7 @@ fftRtsne <- function(X,
         print(df)
 	close(f) 
 
-	flag= system2(command=fast_tsne_path, args=c(data_path, result_path, nthreads));
+	flag= system2(command=fast_tsne_path, args=c(version_number,data_path, result_path, nthreads));
 	if (flag != 0) {
 		stop('tsne call failed');
 	}
