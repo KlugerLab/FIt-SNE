@@ -8,7 +8,7 @@
 
 void precompute_2d(double x_max, double x_min, double y_max, double y_min, int n_boxes, int n_interpolation_points,
                    kernel_type_2d kernel, double *box_lower_bounds, double *box_upper_bounds, double *y_tilde_spacings,
-                   double *y_tilde, double *x_tilde, complex<double> *fft_kernel_tilde) {
+                   double *y_tilde, double *x_tilde, complex<double> *fft_kernel_tilde, double df ) {
     /*
      * Set up the boxes
      */
@@ -52,7 +52,7 @@ void precompute_2d(double x_max, double x_min, double y_max, double y_min, int n
     auto *kernel_tilde = new double[n_fft_coeffs * n_fft_coeffs]();
     for (int i = 0; i < n_interpolation_points_1d; i++) {
         for (int j = 0; j < n_interpolation_points_1d; j++) {
-            double tmp = kernel(y_tilde[0], x_tilde[0], y_tilde[i], x_tilde[j]);
+            double tmp = kernel(y_tilde[0], x_tilde[0], y_tilde[i], x_tilde[j],df );
             kernel_tilde[(n_interpolation_points_1d + i) * n_fft_coeffs + (n_interpolation_points_1d + j)] = tmp;
             kernel_tilde[(n_interpolation_points_1d - i) * n_fft_coeffs + (n_interpolation_points_1d + j)] = tmp;
             kernel_tilde[(n_interpolation_points_1d + i) * n_fft_coeffs + (n_interpolation_points_1d - j)] = tmp;

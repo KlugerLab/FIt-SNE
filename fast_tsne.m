@@ -63,6 +63,11 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
 %
 %                   opts.perplexity_list - if perplexity==0 then perplexity combination will
 %                        be used with values taken from perplexity_list. Default: []
+%                   opts.df - Degree of freedom of t-distribution, must be greater than 0.
+%                        Values smaller than 1 correspond to heavier tails, which can often 
+%                        resolve substructure in the embedding. See Kobak et al. (2019) for
+%                        details. Default is 1.0
+
 
 
 % Runs the C++ implementation of fast t-SNE using either the IFt-SNE
@@ -96,6 +101,8 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
 % CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING 
 % IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY 
 % OF SUCH DAMAGE.
+
+    version_number = '1.1.0';
     if (nargin == 1)
         opts.perplexity = 30;
     end
@@ -275,6 +282,12 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
     else
         nthreads = opts.nthreads;
     end
+
+    if (~isfield(opts, 'df'))
+        df = 1;
+    else
+        df = opts.df;
+    end
     
     X = double(X);
     
@@ -283,7 +296,7 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
     
     % Compile t-SNE C code
     if(~exist(fullfile(tsne_path,'./fast_tsne'),'file') && isunix)
- 	system(sprintf('g++ -std=c++11 -O3  src/sptree.cpp src/tsne.cpp src/nbodyfft.cpp  -o bin/fast_tsne -pthread -lfftw3 -lm'));    end
+ 	system(sprintf('g++ -std=c++11 -O3  src/sptree.cpp src/tsne.cpp src/nbodyfft.cpp  -o bin/fast_tsne -pthread -lfftw3 -lm'));    
     end
     
     % Compile t-SNE C code on Windows
@@ -296,12 +309,12 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
         stop_lying_iter, K, sigma, nbody_algo, no_momentum_during_exag, knn_algo,...
         early_exag_coeff, n_trees, search_k, start_late_exag_iter, late_exag_coeff, rand_seed,...
         nterms, intervals_per_integer, min_num_intervals, initialization, load_affinities, ...
-        perplexity_list, mom_switch_iter, momentum, final_momentum, learning_rate);
+        perplexity_list, mom_switch_iter, momentum, final_momentum, learning_rate,df);
 
     disp('Data written');
     tic
     %[flag, cmdout] = system(fullfile(tsne_path,'/fast_tsne'), '-echo');
-    cmd = sprintf('%s data.dat result.dat %d',fullfile(tsne_path,'/fast_tsne'), nthreads);
+    cmd = sprintf('%s %s data.dat result.dat %d',fullfile(tsne_path,'/fast_tsne'), version_number, nthreads);
     [flag, cmdout] = system(cmd, '-echo');
     if(flag~=0)
         error(cmdout);
@@ -318,7 +331,7 @@ function write_data(filename, X, no_dims, theta, perplexity, max_iter,...
     stop_lying_iter, K, sigma, nbody_algo, no_momentum_during_exag, knn_algo,...
     early_exag_coeff, n_trees, search_k, start_late_exag_iter, late_exag_coeff, rand_seed,...
     nterms, intervals_per_integer, min_num_intervals, initialization, load_affinities, ...
-    perplexity_list, mom_switch_iter, momentum, final_momentum, learning_rate)
+    perplexity_list, mom_switch_iter, momentum, final_momentum, learning_rate,df)
 
     [n, d] = size(X);
 
@@ -353,6 +366,7 @@ function write_data(filename, X, no_dims, theta, perplexity, max_iter,...
     fwrite(h, min_num_intervals, 'int');
     fwrite(h, X', 'double');
     fwrite(h, rand_seed, 'integer*4');
+    fwrite(h, df, 'double');
     fwrite(h, load_affinities, 'integer*4');
     if ~isnan(initialization)
 	    fwrite(h, initialization', 'double');
