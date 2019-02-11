@@ -6,7 +6,7 @@ t-Stochastic Neighborhood Embedding ([t-SNE](https://lvdmaaten.github.io/tsne/))
 * Computation of Input Similarities: Instead of computing nearest neighbors using vantage-point trees, we approximate nearest neighbors using the [Annoy](https://github.com/spotify/annoy) library. The neighbor lookups are multithreaded to take advantage of machines with multiple cores. Using "near" neighbors as opposed to strictly "nearest" neighbors is faster, but also has a smoothing effect, which can be useful for embedding some datasets (see [Linderman et al. (2017)](https://arxiv.org/abs/1711.04712)). If subtle detail is required (e.g. in identifying small clusters), then use vantage-point trees (which is also multithreaded in this implementation). 
 
 
-Check out our [preprint](https://arxiv.org/abs/1712.09005) for more details and some benchmarks.
+Check out our [paper](https://www.nature.com/articles/s41592-018-0308-4) or [preprint](https://arxiv.org/abs/1712.09005) for more details and some benchmarks.
 
 ## Features
 Additionally, this implementation includes the following features:
@@ -51,7 +51,7 @@ We are grateful for members of the community who have [contributed](https://gith
 
 If you use FIt-SNE, please cite:
 
-George C. Linderman, Manas Rachh, Jeremy G. Hoskins, Stefan Steinerberger, Yuval Kluger. (2017). Efficient Algorithms for t-distributed Stochastic Neighborhood Embedding. (2017) *arXiv:1712.09005* ([link](https://arxiv.org/abs/1712.09005))
+George C. Linderman, Manas Rachh, Jeremy G. Hoskins, Stefan Steinerberger, Yuval Kluger. (2019). Fast interpolation-based t-SNE for improved visualization of single-cell RNA-seq data. Nature Methods. ([link](https://www.nature.com/articles/s41592-018-0308-4))
 
 Our implementation is derived from the Barnes-Hut implementation:
 
