@@ -187,7 +187,6 @@ fftRtsne <- function(X,
 	writeBin( as.integer(nterms), f,size=4) 
 	writeBin( as.numeric(intervals_per_integer), f,size=8) 
 	writeBin( as.integer(min_num_intervals), f,size=4) 
-	tX = c(t(X))
 	writeBin( tX, f) 
 	writeBin( as.integer(rand_seed), f,size=4) 
         writeBin(as.numeric(df), f, size=8)
