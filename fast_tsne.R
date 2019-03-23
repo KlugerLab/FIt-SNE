@@ -83,13 +83,13 @@ fftRtsne <- function(X,
     message("FIt-SNE R wrapper loading.")
     message("FIt-SNE root directory was set to",  FAST_TSNE_SCRIPT_DIR)
   
-        version_number = '1.1.0'
+        version_number <- '1.1.0'
 
 	if (is.null(fast_tsne_path)) {
 		if(.Platform$OS.type == "unix") {
-			fast_tsne_path = file.path(FAST_TSNE_SCRIPT_DIR, "bin", "fast_tsne")
+			fast_tsne_path <- file.path(FAST_TSNE_SCRIPT_DIR, "bin", "fast_tsne")
 		} else {
-			fast_tsne_path = file.path(FAST_TSNE_SCRIPT_DIR, "bin", "FItSNE.exe")
+			fast_tsne_path <- file.path(FAST_TSNE_SCRIPT_DIR, "bin", "FItSNE.exe")
 		}
 	}
 
@@ -119,42 +119,42 @@ fftRtsne <- function(X,
 	if (!is.wholenumber(dims) || dims<=0) { stop("Incorrect dimensionality.")}
 	if (search_k == -1) {
        if (perplexity>0) {
-          search_k = n_trees*perplexity*3
+          search_k <- n_trees*perplexity*3
        } else if (perplexity==0) {
-          search_k = n_trees*max(perplexity_list)*3
+          search_k <- n_trees*max(perplexity_list)*3
        } else { 
-          search_k = n_trees*K
+          search_k <- n_trees*K
        }
     }
 
 	if (fft_not_bh){
-	  nbody_algo = 2
+	  nbody_algo <- 2
 	}else{
-	  nbody_algo = 1
+	  nbody_algo <- 1
 	}
 
 	if (is.null(load_affinities)) {
-		load_affinities = 0
+		load_affinities <- 0
 	} else {
 		if (load_affinities == 'load') {
-			load_affinities = 1
+			load_affinities <- 1
 		} else if (load_affinities == 'save') {
-			load_affinities = 2
+			load_affinities <- 2
 		} else {
-			load_affinities = 0
+			load_affinities <- 0
 		}
 	}
 	
 	if (ann_not_vptree){
-	  knn_algo = 1
+	  knn_algo <- 1
 	}else{
-	  knn_algo = 2
+	  knn_algo <- 2
 	}
-	tX = as.numeric(t(X))
+	tX <- as.numeric(t(X))
 
 	f <- file(data_path, "wb")
-	n = nrow(X)
-	D = ncol(X)
+	n <- nrow(X)
+	D <- ncol(X)
 	writeBin(as.integer(n), f,size= 4)
 	writeBin( as.integer(D),f,size= 4)
 	writeBin( as.numeric(theta), f,size= 8) #theta
@@ -194,7 +194,7 @@ fftRtsne <- function(X,
         print(df)
 	close(f) 
 
-	flag= system2(command=fast_tsne_path, args=c(version_number,data_path, result_path, nthreads))
+	flag <- system2(command=fast_tsne_path, args=c(version_number,data_path, result_path, nthreads))
 	if (flag != 0) {
 		stop('tsne call failed')
 	}
