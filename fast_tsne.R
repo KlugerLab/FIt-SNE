@@ -64,7 +64,6 @@
 #
 fftRtsne <- function(X, 
 		     dims=2, perplexity=30, theta=0.5,
-		     check_duplicates=TRUE,
 		     max_iter=1000,
 		     fft_not_bh = TRUE,
 		     ann_not_vptree = TRUE,
@@ -79,8 +78,7 @@ fftRtsne <- function(X,
 		     load_affinities=NULL,
 		     fast_tsne_path=NULL, nthreads=0, perplexity_list = NULL, 
                      get_costs = FALSE, df = 1.0,
-		     FAST_TSNE_SCRIPT_DIR = getwd(),
-		     ... ) {
+		     FAST_TSNE_SCRIPT_DIR = getwd()) {
   
   cat(sprintf("FIt-SNE R wrapper loading.\nFIt-SNE root directory was set to %s\n",  FAST_TSNE_SCRIPT_DIR))
   
