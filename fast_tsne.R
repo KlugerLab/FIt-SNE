@@ -80,7 +80,8 @@ fftRtsne <- function(X,
                      get_costs = FALSE, df = 1.0,
 		     FAST_TSNE_SCRIPT_DIR = getwd()) {
   
-  cat(sprintf("FIt-SNE R wrapper loading.\nFIt-SNE root directory was set to %s\n",  FAST_TSNE_SCRIPT_DIR))
+    message("FIt-SNE R wrapper loading.")
+    message("FIt-SNE root directory was set to",  FAST_TSNE_SCRIPT_DIR)
   
         version_number = '1.1.0'
 
