@@ -151,7 +151,7 @@ fftRtsne <- function(X,
 	}else{
 	  knn_algo = 2;
 	}
-	tX = c(t(X))
+	tX = as.numeric(t(X))
 
 	f <- file(data_path, "wb")
 	n = nrow(X);
