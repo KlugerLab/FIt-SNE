@@ -128,33 +128,33 @@ fftRtsne <- function(X,
     }
 
 	if (fft_not_bh){
-	  nbody_algo = 2;
+	  nbody_algo = 2
 	}else{
-	  nbody_algo = 1;
+	  nbody_algo = 1
 	}
 
 	if (is.null(load_affinities)) {
-		load_affinities = 0;
+		load_affinities = 0
 	} else {
 		if (load_affinities == 'load') {
-			load_affinities = 1;
+			load_affinities = 1
 		} else if (load_affinities == 'save') {
-			load_affinities = 2;
+			load_affinities = 2
 		} else {
-			load_affinities = 0;
+			load_affinities = 0
 		}
 	}
 	
 	if (ann_not_vptree){
-	  knn_algo = 1;
+	  knn_algo = 1
 	}else{
-	  knn_algo = 2;
+	  knn_algo = 2
 	}
 	tX = as.numeric(t(X))
 
 	f <- file(data_path, "wb")
-	n = nrow(X);
-	D = ncol(X);
+	n = nrow(X)
+	D = ncol(X)
 	writeBin(as.integer(n), f,size= 4)
 	writeBin( as.integer(D),f,size= 4)
 	writeBin( as.numeric(theta), f,size= 8) #theta
@@ -194,21 +194,21 @@ fftRtsne <- function(X,
         print(df)
 	close(f) 
 
-	flag= system2(command=fast_tsne_path, args=c(version_number,data_path, result_path, nthreads));
+	flag= system2(command=fast_tsne_path, args=c(version_number,data_path, result_path, nthreads))
 	if (flag != 0) {
-		stop('tsne call failed');
+		stop('tsne call failed')
 	}
 	f <- file(result_path, "rb")
-	n <- readBin(f, integer(), n=1, size=4);
-	d <- readBin(f, integer(), n=1, size=4);
-	Y <- readBin(f, numeric(), n=n*d);
-        Y <- t(matrix(Y, nrow=d));
+	n <- readBin(f, integer(), n=1, size=4)
+	d <- readBin(f, integer(), n=1, size=4)
+	Y <- readBin(f, numeric(), n=n*d)
+        Y <- t(matrix(Y, nrow=d))
         if (get_costs ) {
-            tmp <- readBin(f, integer(), n=1, size=4);
-            costs <- readBin(f, numeric(), n=max_iter,size=8);
-            Yout <- list( Y=Y, costs=costs);
+            tmp <- readBin(f, integer(), n=1, size=4)
+            costs <- readBin(f, numeric(), n=max_iter,size=8)
+            Yout <- list( Y=Y, costs=costs)
         }else {
-            Yout <- Y;
+            Yout <- Y
         }
         close(f)
         file.remove(data_path)
