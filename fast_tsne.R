@@ -88,9 +88,9 @@ fftRtsne <- function(X,
 
 	if (is.null(fast_tsne_path)) {
 		if(.Platform$OS.type == "unix") {
-			fast_tsne_path = sprintf('%s/bin/fast_tsne', FAST_TSNE_SCRIPT_DIR )
+			fast_tsne_path = file.path(FAST_TSNE_SCRIPT_DIR, "bin", "fast_tsne")
 		} else {
-			fast_tsne_path = sprintf('%s/bin/FItSNE.exe', FAST_TSNE_SCRIPT_DIR)
+			fast_tsne_path = file.path(FAST_TSNE_SCRIPT_DIR, "bin", "FItSNE.exe")
 		}
 	}
 
