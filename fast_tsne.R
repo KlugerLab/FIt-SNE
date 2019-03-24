@@ -194,7 +194,6 @@ fftRtsne <- function(X,
   writeBin(as.numeric(df), f, size = 8)
 	writeBin(as.integer(load_affinities), f, size = 4) 
 	if (!is.null(initialization)) { writeBin( c(t(initialization)), f) }		
-  print(df)
 	close(f) 
 
 	flag <- system2(command = fast_tsne_path, 
