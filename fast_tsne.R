@@ -1,3 +1,10 @@
+# Note: this script should be sourced as: source('<path to file>', chdir=T)
+
+FAST_TSNE_SCRIPT_DIR <<- getwd() 
+
+message("FIt-SNE R wrapper loading.")
+message("FIt-SNE root directory was set to ",  FAST_TSNE_SCRIPT_DIR)
+
 # Compute FIt-SNE of a dataset
 #       dims - dimensionality of the embedding. Default 2.
 #       perplexity - perplexity is used to determine the
@@ -77,11 +84,7 @@ fftRtsne <- function(X,
 		     data_path = NULL, result_path = NULL,
 		     load_affinities = NULL,
 		     fast_tsne_path = NULL, nthreads = 0, perplexity_list = NULL, 
-         get_costs = FALSE, df = 1.0,
-		     FAST_TSNE_SCRIPT_DIR = getwd()) {
-  
-  message("FIt-SNE R wrapper loading.")
-  message("FIt-SNE root directory was set to ",  FAST_TSNE_SCRIPT_DIR)
+         get_costs = FALSE, df = 1.0) {
   
   version_number <- '1.1.0'
 
