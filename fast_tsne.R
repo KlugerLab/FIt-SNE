@@ -89,7 +89,7 @@ fftRtsne <- function(X,
   version_number <- '1.1.0'
 
 	if (is.null(fast_tsne_path)) {
-		if(.Platform$OS.type == "unix") {
+		if (.Platform$OS.type == "unix") {
 			fast_tsne_path <- file.path(FAST_TSNE_SCRIPT_DIR, "bin", "fast_tsne")
 		} else {
 			fast_tsne_path <- file.path(FAST_TSNE_SCRIPT_DIR, "bin", "FItSNE.exe")
@@ -119,7 +119,7 @@ fftRtsne <- function(X,
 	if (!is.wholenumber(stop_early_exag_iter) || stop_early_exag_iter < 0) { stop("stop_early_exag_iter should be a positive integer")}
 	if (!is.numeric(exaggeration_factor)) { stop("exaggeration_factor should be numeric")}
 	if (!is.numeric(df)) { stop("df should be numeric")}
-	if (!is.wholenumber(dims) || dims<=0) { stop("Incorrect dimensionality.")}
+	if (!is.wholenumber(dims) || dims <= 0) { stop("Incorrect dimensionality.")}
 	if (search_k == -1) {
     if (perplexity > 0) {
       search_k <- n_trees * perplexity * 3
@@ -130,7 +130,7 @@ fftRtsne <- function(X,
     }
   }
 
-	if (fft_not_bh){
+	if (fft_not_bh) {
 	  nbody_algo <- 2
 	} else {
 	  nbody_algo <- 1
@@ -148,7 +148,7 @@ fftRtsne <- function(X,
 		}
 	}
 	
-	if (ann_not_vptree){
+	if (ann_not_vptree) {
 	  knn_algo <- 1
 	} else {
 	  knn_algo <- 2
@@ -180,7 +180,7 @@ fftRtsne <- function(X,
 	writeBin(as.integer(nbody_algo), f, size = 4)  #not barnes hut
 	writeBin(as.integer(knn_algo), f, size = 4) 
 	writeBin(as.numeric(exaggeration_factor), f, size = 8) #compexag
-	writeBin(as.integer(no_momentum_during_exag), f, size=4) 
+	writeBin(as.integer(no_momentum_during_exag), f, size = 4) 
 	writeBin(as.integer(n_trees), f, size = 4) 
 	writeBin(as.integer(search_k), f, size = 4) 
 	writeBin(as.integer(start_late_exag_iter), f, size = 4) 
