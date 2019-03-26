@@ -1917,7 +1917,7 @@ int main(int argc, char *argv[]) {
 		result_path = argv[3];
 	}
 	if(argc >= 5) {
-		nthreads = (unsigned int)strtoul(argv[3], (char **)NULL, 10);
+		nthreads = (unsigned int)strtoul(argv[4], (char **)NULL, 10);
 	}
     if (nthreads == 0) {
         nthreads = std::thread::hardware_concurrency();
