@@ -250,7 +250,7 @@ void n_body_fft_2d(int N, int n_terms, double *xs, double *ys, double *chargesQi
 
 void precompute(double y_min, double y_max, int n_boxes, int n_interpolation_points, kernel_type kernel,
                 double *box_lower_bounds, double *box_upper_bounds, double *y_tilde_spacing, double *y_tilde,
-                complex<double> *fft_kernel_vector) {
+                complex<double> *fft_kernel_vector, double df) {
     /*
      * Set up the boxes
      */
@@ -288,7 +288,7 @@ void precompute(double y_min, double y_max, int n_boxes, int n_interpolation_poi
     // [0 0 0 0 0 5 4 3 2 1] for linear kernel
     // This evaluates the Cauchy kernel centered on y_tilde[0] to all the other points
     for (int i = 0; i < total_interpolation_points; i++) {
-        kernel_vector[total_interpolation_points + i].real(kernel(y_tilde[0], y_tilde[i]));
+        kernel_vector[total_interpolation_points + i].real(kernel(y_tilde[0], y_tilde[i], df));
     }
     // This part symmetrizes the vector, this embeds the Toeplitz generating vector into the circulant generating vector
     // but also has the nice property of symmetrizing the Cauchy kernel, which is probably planned

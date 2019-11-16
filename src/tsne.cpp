@@ -66,9 +66,19 @@ int itTest = 0;
 bool measure_accuracy = false;
 
 
-double squared_cauchy(double x, double y) {
+double squared_cauchy(double x, double y, double df) {
     return pow(1.0 + pow(x - y, 2), -2);
 }
+
+double general_kernel(double x,  double y, double df) {
+    return pow(1.0 + ((x - y)*(x-y) )/df, -(df));
+}
+
+double squared_general_kernel(double x,  double y, double df) {
+    return pow(1.0 + ((x - y)*(x-y) )/df, -(df+1.0));
+}
+
+
 
 
 double squared_cauchy_2d(double x1, double x2, double y1, double y2,double df) {
@@ -433,8 +443,14 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
             if (nbody_algorithm == 2) {
                 // Use FFT accelerated interpolation based negative gradients
                 if (no_dims == 1) {
+                    if (df ==1.0) {
                     computeFftGradientOneD(P, row_P, col_P, val_P, Y, N, no_dims, dY, nterms, intervals_per_integer,
                                            min_num_intervals, nthreads);
+                    }else {
+                        computeFftGradientOneDVariableDf(P, row_P, col_P, val_P, Y, N, no_dims, dY, nterms, intervals_per_integer,
+                                           min_num_intervals, nthreads,df );
+
+                    }
                 } else {
                     if (df ==1.0) {
                         computeFftGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, nterms, intervals_per_integer,
@@ -587,6 +603,116 @@ void TSNE::computeGradient(double *P, unsigned int *inp_row_P, unsigned int *inp
     delete tree;
 }
 
+// Compute the gradient of the t-SNE cost function using the FFT interpolation based approximation for for one
+// dimensional Ys
+void TSNE::computeFftGradientOneDVariableDf(double *P, unsigned int *inp_row_P, unsigned int *inp_col_P, double *inp_val_P,
+                                  double *Y, int N, int D, double *dC, int n_interpolation_points,
+                                  double intervals_per_integer, int min_num_intervals, unsigned int nthreads, double df) {
+    // Zero out the gradient
+    for (int i = 0; i < N * D; i++) dC[i] = 0.0;
+
+    // Push all the points at which we will evaluate
+    // Y is stored row major, with a row corresponding to a single point
+    // Find the min and max values of Ys
+    double y_min = INFINITY;
+    double y_max = -INFINITY;
+    for (unsigned long i = 0; i < N; i++) {
+        if (Y[i] < y_min) y_min = Y[i];
+        if (Y[i] > y_max) y_max = Y[i];
+    }
+
+    auto n_boxes = static_cast<int>(fmax(min_num_intervals, (y_max - y_min) / intervals_per_integer));
+
+    int squared_n_terms = 2;
+    auto *SquaredChargesQij = new double[N * squared_n_terms];
+    auto *SquaredPotentialsQij = new double[N * squared_n_terms]();
+
+
+    for (unsigned long j = 0; j < N; j++) {
+        SquaredChargesQij[j * squared_n_terms + 0] = Y[j];
+        SquaredChargesQij[j * squared_n_terms + 1] = 1;
+    }
+
+
+
+    auto *box_lower_bounds = new double[n_boxes];
+    auto *box_upper_bounds = new double[n_boxes];
+    auto *y_tilde_spacings = new double[n_interpolation_points];
+    auto *y_tilde = new double[n_interpolation_points * n_boxes]();
+    auto *fft_kernel_vector = new complex<double>[2 * n_interpolation_points * n_boxes];
+
+    precompute(y_min, y_max, n_boxes, n_interpolation_points, &squared_general_kernel, box_lower_bounds, box_upper_bounds,
+               y_tilde_spacings, y_tilde, fft_kernel_vector, df);
+    nbodyfft(N, squared_n_terms, Y, SquaredChargesQij, n_boxes, n_interpolation_points, box_lower_bounds, box_upper_bounds,
+             y_tilde_spacings, y_tilde, fft_kernel_vector, SquaredPotentialsQij);
+
+
+    int not_squared_n_terms = 1;
+    auto *NotSquaredChargesQij = new double[N * not_squared_n_terms];
+    auto *NotSquaredPotentialsQij = new double[N * not_squared_n_terms]();
+
+    for (unsigned long j = 0; j < N; j++) {
+        NotSquaredChargesQij[j * not_squared_n_terms + 0] = 1;
+    }
+
+    precompute(y_min, y_max, n_boxes, n_interpolation_points, &general_kernel, box_lower_bounds, box_upper_bounds,
+               y_tilde_spacings, y_tilde, fft_kernel_vector, df);
+    nbodyfft(N, not_squared_n_terms, Y, NotSquaredChargesQij, n_boxes, n_interpolation_points, box_lower_bounds, box_upper_bounds,
+             y_tilde_spacings, y_tilde, fft_kernel_vector, NotSquaredPotentialsQij);
+
+
+
+    // Compute the normalization constant Z or sum of q_{ij}.
+    double sum_Q = 0;
+    for (unsigned long i = 0; i < N; i++) {
+        double h1 = NotSquaredPotentialsQij[i * not_squared_n_terms+ 0];
+        sum_Q += h1;
+    }
+    sum_Q -= N;
+
+
+    this->current_sum_Q = sum_Q;
+
+    // Now, figure out the Gaussian component of the gradient. This corresponds to the "attraction" term of the
+    // gradient. It was calculated using a fast KNN approach, so here we just use the results that were passed to this
+    // function
+//    unsigned int ind2 = 0;
+  double *pos_f = new double[N];
+
+        PARALLEL_FOR(nthreads, N, {
+            double dim1 = 0;
+            for (unsigned int i = inp_row_P[loop_i]; i < inp_row_P[loop_i + 1]; i++) {
+                // Compute pairwise distance and Q-value
+                unsigned int ind3 = inp_col_P[i];
+                double d_ij = Y[loop_i] - Y[ind3];
+                double q_ij = 1 / (1 + (d_ij * d_ij)/df);
+                dim1 += inp_val_P[i] * q_ij * d_ij;
+            }
+                pos_f[loop_i] = dim1;
+
+        });
+
+    
+        double *neg_f = new double[N * 2];
+        for (unsigned int i = 0; i < N; i++) {
+            double h2 = SquaredPotentialsQij[i * squared_n_terms];
+            double h4 = SquaredPotentialsQij[i * squared_n_terms + 1];
+            neg_f[i] = ( Y[i] *h4 - h2 ) / sum_Q;
+            dC[i ] = (pos_f[i] - neg_f[i ]);
+        }
+
+    delete[] SquaredChargesQij;
+    delete[] SquaredPotentialsQij;
+    delete[] NotSquaredChargesQij;
+    delete[] NotSquaredPotentialsQij;
+    delete[] pos_f;
+    delete[] neg_f;
+    delete[] box_lower_bounds;
+    delete[] box_upper_bounds;
+    delete[] y_tilde_spacings;
+    delete[] y_tilde;
+    delete[] fft_kernel_vector;
+}
 
 // Compute the gradient of the t-SNE cost function using the FFT interpolation based approximation for for one
 // dimensional Ys
@@ -628,7 +754,7 @@ void TSNE::computeFftGradientOneD(double *P, unsigned int *inp_row_P, unsigned i
     auto *fft_kernel_vector = new complex<double>[2 * n_interpolation_points * n_boxes];
 
     precompute(y_min, y_max, n_boxes, n_interpolation_points, &squared_cauchy, box_lower_bounds, box_upper_bounds,
-               y_tilde_spacings, y_tilde, fft_kernel_vector);
+               y_tilde_spacings, y_tilde, fft_kernel_vector, 1.0);
     nbodyfft(N, n_terms, Y, chargesQij, n_boxes, n_interpolation_points, box_lower_bounds, box_upper_bounds,
              y_tilde_spacings, y_tilde, fft_kernel_vector, potentialsQij);
 
