@@ -10,12 +10,12 @@ Check out our [paper](https://www.nature.com/articles/s41592-018-0308-4) or [pre
 
 ## Features
 Additionally, this implementation includes the following features:
-* Early exaggeration: In [Linderman and Steinerberger (2017)](https://arxiv.org/abs/1706.02582), we showed that appropriately choosing the early exaggeration coefficient can lead to improved embedding of swissrolls and other synthetic datasets. Early exaggeration is built into all t-SNE implementations; here we highlight its importance as a parameter. 
-* Late exaggeration: Increasing the exaggeration coefficient late in the optimization process can improve separation of the clusters. [Kobak and Berens (2018)](https://www.biorxiv.org/content/10.1101/453449v1) suggest starting late exaggeration immediately following early exaggeration. 
-* Initialization: Custom initialization can be provided from Python/Matlab/R. As suggested by [Kobak and Berens (2018)](https://www.biorxiv.org/content/10.1101/453449v1), initializing t-SNE with the first two principal components (scaled to have standard deviation 0.0001) results in an embedding which often preserves the global structure more effectively than the default random normalization. See there for other initialisation tricks.
-* Variable degrees of freedom: [Kobak et al. (2019)](https://arxiv.org/abs/1902.05804) show that decreasing the degree of freedom (df) of the t-distribution (resulting in heavier tails)  reveals fine structure that is not visible in standard t-SNE.
-* Perplexity combination: The perplexity parameter determines the width of the Gaussian kernel, such that small perplexity values uncover local structure while larger values reveal global structure. [Kobak and Berens (2018)](https://www.biorxiv.org/content/10.1101/453449v1) show that using combination of several perplexity values, resulting in a multi-scale embedding, can be useful. 
-* All optimisation parameters can be controlled from Python/Matlab/R. For example, [Belkina et al. (2018)](https://www.biorxiv.org/content/10.1101/451690v2) highlight the importance of increasing the learning rate when embedding large data sets. 
+* Early exaggeration: In [Linderman and Steinerberger (2018)](https://epubs.siam.org/doi/abs/10.1137/18M1216134), we showed that appropriately choosing the early exaggeration coefficient can lead to improved embedding of swissrolls and other synthetic datasets. Early exaggeration is built into all t-SNE implementations; here we highlight its importance as a parameter. 
+* Late exaggeration: Increasing the exaggeration coefficient late in the optimization process can improve separation of the clusters. [Kobak and Berens (2019)](https://www.nature.com/articles/s41467-019-13056-x) suggest starting late exaggeration immediately following early exaggeration. 
+* Initialization: Custom initialization can be provided from Python/Matlab/R. As suggested by [Kobak and Berens (2019)](https://www.nature.com/articles/s41467-019-13056-x), initializing t-SNE with the first two principal components (scaled to have standard deviation 0.0001) results in an embedding which often preserves the global structure more effectively than the default random normalization. See there for other initialisation tricks.
+* Variable degrees of freedom: [Kobak et al. (2019)](https://ecmlpkdd2019.org/downloads/paper/327.pdf) show that decreasing the degree of freedom (df) of the t-distribution (resulting in heavier tails)  reveals fine structure that is not visible in standard t-SNE.
+* Perplexity combination: The perplexity parameter determines the width of the Gaussian kernel, such that small perplexity values uncover local structure while larger values reveal global structure. [Kobak and Berens (2019)](https://www.nature.com/articles/s41467-019-13056-x) show that using combination of several perplexity values, resulting in a multi-scale embedding, can be useful. 
+* All optimisation parameters can be controlled from Python/Matlab/R. For example, [Belkina et al. (2019)](https://www.nature.com/articles/s41467-019-13055-y) highlight the importance of increasing the learning rate when embedding large data sets. 
 
 
 ## Installation
@@ -30,7 +30,7 @@ g++ -std=c++11 -O3  src/sptree.cpp src/tsne.cpp src/nbodyfft.cpp  -o bin/fast_ts
 ```
 See [here](https://github.com/KlugerLab/FIt-SNE/issues/35) for instructions in case one does not have `sudo` rights (one can install `FFTW` in the home directory and provide its path to `g++`).
 
-Check out `examples/` for usage. The [Python demo notebook](https://github.com/KlugerLab/FIt-SNE/blob/master/examples/test.ipynb) walks one through the most of the available options using MNIST data set.
+Check out `examples/` for usage. The [Python demo notebook](https://github.com/KlugerLab/FIt-SNE/blob/master/examples/test.ipynb) walks one through the most of the available options using the MNIST data set.
 
 
 ### Windows
