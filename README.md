@@ -26,7 +26,7 @@ R, Matlab, and Python wrappers are `fast_tsne.R`, `fast_tsne.m`, and `fast_tsne.
 ### OSX and Linux
 The only prerequisite is [FFTW](http://www.fftw.org/), which can be downloaded and installed from the website. Then, from the root directory compile the code as:
 ```bash
-g++ -std=c++11 -O3  src/sptree.cpp src/tsne.cpp src/nbodyfft.cpp  -o bin/fast_tsne -pthread -lfftw3 -lm
+g++ -std=c++11 -O3  src/sptree.cpp src/tsne.cpp src/nbodyfft.cpp  -o bin/fast_tsne -pthread -lfftw3 -lm -Wno-address-of-packed-member
 ```
 See [here](https://github.com/KlugerLab/FIt-SNE/issues/35) for instructions in case one does not have `sudo` rights (one can install `FFTW` in the home directory and provide its path to `g++`).
 
