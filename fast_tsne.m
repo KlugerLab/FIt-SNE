@@ -103,192 +103,85 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
 % OF SUCH DAMAGE.
 
     version_number = '1.1.0';
-    if (nargin == 1)
-        opts.perplexity = 30;
-    end
-    if (~isfield(opts, 'perplexity'))
-        perplexity = 30;
-    else
-        perplexity = opts.perplexity;
-    end
-    if (~isfield(opts, 'no_dims'))
-        no_dims = 2;
-    else
-        no_dims = opts.no_dims;
-    end
 
-    if (~isfield(opts, 'theta'))
-        theta = 0.5;
-    else
-        theta = opts.theta;
-    end
-    
-    if (~isfield(opts, 'stop_early_exag_iter'))
-        stop_lying_iter = 250;
-    else
-        stop_lying_iter = opts.stop_early_exag_iter;
-    end
+    % default parameters and flags 
+    p.perplexity = 30;
+    p.no_dims = 2;
+    p.theta = .5;
+    p.stop_early_exag_iter = 250; % stop_lying_iter
+    p.mom_switch_iter = 250;
+    p.momentum = .5;
+    p.final_momentum = .8;
+    p.learning_rate = 200;
+    p.max_iter = 1000;
+    p.early_exag_coeff = 12;
+    p.start_late_exag_iter = -1;
+    p.late_exag_coeff = -1;
+    p.rand_seed = -1;
+    p.nbody_algo = 2;
+    p.knn_algo = 1;
+    p.K = -1;
+    p.sigma = -30;
+    p.no_momentum_during_exag = 0;
+    p.n_trees = 50;
+    p.perplexity_list = [];
+    p.nterms = 3;
+    p.intervals_per_integer = 1;
+    p.min_num_intervals = 50;
+    p.nthreads = 0;
+    p.df = 1;
+    p.search_k = [];
+    p.initialization = NaN;
+    p.load_affinities = 0;
 
-    if (~isfield(opts, 'mom_switch_iter'))
-        mom_switch_iter = 250;
-    else
-        mom_switch_iter = opts.mom_switch_iter;
-    end
 
-    if (~isfield(opts, 'momentum'))
-        momentum = .5;
-    else
-        momentum = opts.momentum;
-    end
+    if nargin == 2
+        % options provided 
 
-    if (~isfield(opts, 'final_momentum'))
-        final_momentum = .8;
-    else
-        final_momentum = opts.final_momentum;
-    end
+        assert(isstruct(opts),'2nd argument must be a structure')
 
-    if (~isfield(opts, 'learning_rate'))
-        learning_rate = 200;
-    else
-        learning_rate = opts.learning_rate;
-    end
-
-    if (~isfield(opts, 'max_iter'))
-        max_iter = 1E3;
-    else
-        max_iter = opts.max_iter;
-    end
-    
-    if (~isfield(opts, 'early_exag_coeff'))
-        early_exag_coeff = 12;
-    else
-        early_exag_coeff = opts.early_exag_coeff;
-    end
-    if (~isfield(opts, 'start_late_exag_iter'))
-        start_late_exag_iter = -1;
-    else
-        start_late_exag_iter = opts.start_late_exag_iter;
-    end
-    
-    if (~isfield(opts, 'late_exag_coeff'))
-        late_exag_coeff = -1;
-    else
-        late_exag_coeff = opts.late_exag_coeff;
-    end
-    
-    if (~isfield(opts, 'rand_seed'))
-        rand_seed = -1;
-    else
-        rand_seed = opts.rand_seed;
-    end
-    
-    if (~isfield(opts, 'nbody_algo'))
-        nbody_algo = 2; %default is fmm
-    else
-        if ( opts.nbody_algo == 'bh')
-            nbody_algo = 1;
-        else
-            nbody_algo = 2;
+        % copy over user-supplied parameters and options
+        fn = fieldnames(p);
+        for i = 1:length(fn)
+            if isfield(opts,fn{i})
+                p.(fn{i}) = opts.(fn{i});
+            end
         end
+
     end
-    if (~isfield(opts, 'knn_algo'))
-        knn_algo = 1; %default is ann
-    else
-        if ( opts.knn_algo == 'vptree')
-            knn_algo = 2;
+
+    % parse some optional text labels
+    if strcmpi(p.nbody_algo,'bh')
+        p.nbody_algo = 1;
+    end
+
+
+    if strcmpi(p.knn_algo,'vptree')
+        p.knn_algo = 2;
+    end
+    
+
+    if isempty(p.search_k)
+        if p.perplexity > 0
+            p.search_k = 3*p.perplexity*p.n_trees;
+        elseif p.perplexity == 0
+            p.search_k = 3 * max(p.perplexity_list) * p.n_trees;
         else
-            knn_algo = 1;
-        end
-    end
-
-    if (~isfield(opts, 'K'))
-        K = -1;
-    else
-        K = opts.K;
-    end
-    if (~isfield(opts, 'sigma'))
-        sigma = -30;
-    else
-        sigma = opts.sigma;
-    end
-
-    if (~isfield(opts, 'no_momentum_during_exag'))
-        no_momentum_during_exag = 0;
-    else
-        no_momentum_during_exag = opts.no_momentum_during_exag;
-    end
-    if (~isfield(opts, 'n_trees'))
-        n_trees = 50;
-    else
-        n_trees = opts.n_trees;
-    end
-
-    if (~isfield(opts, 'search_k'))
-        if perplexity > 0
-            search_k = 3*perplexity*n_trees;
-        elseif perplexity == 0
-            search_k = 3 * max(opts.perplexity_list) * n_trees;
-        else
-		    search_k = 3*K*n_trees;
+		    p.search_k = 3*p.K*p.n_trees;
     	end
-    else
-        search_k = opts.search_k;
     end
     
-    if (~isfield(opts, 'nterms'))
-        nterms = 3;
+
+
+    if p.load_affinities == 'load'
+        p.load_affinities = 1;
+    elseif p.load_affinities == 'save'
+        p.load_affinities = 2;
     else
-        nterms = opts.nterms;
+        p.load_affinities = 0;
     end
 
-    if (~isfield(opts, 'intervals_per_integer'))
-        intervals_per_integer = 1;
-    else
-        intervals_per_integer = opts.intervals_per_integer;
-    end
-    
-    if (~isfield(opts, 'min_num_intervals'))
-        min_num_intervals = 50;
-    else
-        min_num_intervals = opts.min_num_intervals;
-    end
 
-    if (~isfield(opts, 'initialization'))
-        initialization = nan;
-    else
-        initialization = double(opts.initialization);
-    end
-    
-    if (~isfield(opts, 'perplexity_list'))
-        perplexity_list = [];
-    else
-        perplexity_list = double(opts.perplexity_list);
-    end
-
-    if (~isfield(opts, 'load_affinities'))
-        load_affinities = 0;
-    else
-	    if opts.load_affinities == 'load'
-            load_affinities = 1;
-        elseif opts.load_affinities == 'save'
-            load_affinities = 2;
-	    else
-            load_affinities = 0;
-        end
-    end
-
-    if (~isfield(opts, 'nthreads'))
-        nthreads = 0;
-    else
-        nthreads = opts.nthreads;
-    end
-
-    if (~isfield(opts, 'df'))
-        df = 1;
-    else
-        df = opts.df;
-    end
-    
     X = double(X);
     
     tsne_path = which('fast_tsne');
@@ -305,22 +198,22 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
     end
 
     % Run the fast diffusion SNE implementation
-    write_data('data.dat', X, no_dims, theta, perplexity, max_iter, ...
-        stop_lying_iter, K, sigma, nbody_algo, no_momentum_during_exag, knn_algo,...
-        early_exag_coeff, n_trees, search_k, start_late_exag_iter, late_exag_coeff, rand_seed,...
-        nterms, intervals_per_integer, min_num_intervals, initialization, load_affinities, ...
-        perplexity_list, mom_switch_iter, momentum, final_momentum, learning_rate,df);
+    write_data('data.dat', X, p.no_dims, p.theta, p.perplexity, p.max_iter, ...
+        p.stop_early_exag_iter, p.K, p.sigma, p.nbody_algo, p.no_momentum_during_exag, p.knn_algo,...
+        p.early_exag_coeff, p.n_trees, p.search_k, p.start_late_exag_iter, p.late_exag_coeff, p.rand_seed,...
+        p.nterms, p.intervals_per_integer, p.min_num_intervals, p.initialization, p.load_affinities, ...
+        p.perplexity_list, p.mom_switch_iter, p.momentum, p.final_momentum, p.learning_rate,p.df);
 
     disp('Data written');
     tic
     %[flag, cmdout] = system(fullfile(tsne_path,'/fast_tsne'), '-echo');
-    cmd = sprintf('%s %s data.dat result.dat %d',fullfile(tsne_path,'/fast_tsne'), version_number, nthreads);
+    cmd = sprintf('%s %s data.dat result.dat %d',fullfile(tsne_path,'/fast_tsne'), version_number, p.nthreads);
     [flag, cmdout] = system(cmd, '-echo');
     if(flag~=0)
         error(cmdout);
     end
     toc
-    [mappedX,  costs] = read_data('result.dat', max_iter);   
+    [mappedX,  costs] = read_data('result.dat', p.max_iter);   
     delete('data.dat');
     delete('result.dat');
 end
