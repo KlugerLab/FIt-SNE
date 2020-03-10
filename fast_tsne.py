@@ -1,11 +1,11 @@
 # This is a really basic function that does not do almost any sanity checks
 #
 # Usage example:
-#	import sys; sys.path.append('../')
+#   import sys; sys.path.append('../FIt-SNE/')
 #   from fast_tsne import fast_tsne
 #   import numpy as np
-#	X = np.random.randn(1000, 50)
-#	Z = fast_tsne(X, perplexity = 30)
+#   X = np.random.randn(1000, 50)
+#   Z = fast_tsne(X)
 #
 # Written by Dmitry Kobak
 
@@ -15,14 +15,14 @@ import subprocess
 import struct
 import numpy as np
 
-def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000, 
-              stop_early_exag_iter=250, K=-1, sigma=-1, nbody_algo='FFT', knn_algo='annoy',
-              mom_switch_iter=250, momentum=.5, final_momentum=.8, learning_rate=200,
+def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=750, 
+              stop_early_exag_iter=250, K=-1, sigma=-1, nbody_algo='auto', knn_algo='annoy',
+              mom_switch_iter=250, momentum=.5, final_momentum=.8, learning_rate='auto',
               early_exag_coeff=12, no_momentum_during_exag=False, n_trees=50, 
-              search_k=None, start_late_exag_iter=-1, late_exag_coeff=-1,
+              search_k=None, start_late_exag_iter='auto', late_exag_coeff=-1,
               nterms=3, intervals_per_integer=1, min_num_intervals=50,            
-              seed=-1, initialization=None, load_affinities=None,
-              perplexity_list=None, df=1, return_loss=False, nthreads=None):
+              seed=-1, initialization='pca', load_affinities=None,
+              perplexity_list=None, df=1, return_loss=False, nthreads=-1):
     """Run t-SNE. This implementation supports exact t-SNE, Barnes-Hut t-SNE and FFT-accelerated
     interpolation-based t-SNE (FIt-SNE). This is a Python wrapper to a C++ executable.
 
@@ -40,10 +40,11 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
     map_dims: int
         Number of embedding dimensions. Default 2. FIt-SNE supports only 1 or 2 dimensions.
     max_iter: int
-        Number of gradient descent iterations. Default 1000.
-    nbody_algo: {'Barnes-Hut', 'FFT'}
-        If theta is nonzero, this determins whether to use FIt-SNE or Barnes Hut approximation.
-        Default is 'FFT'.
+        Number of gradient descent iterations. Default 750.
+    nbody_algo: {'Barnes-Hut', 'FFT', 'auto'}
+        If theta is nonzero, this determins whether to use FIt-SNE or Barnes-Hut approximation.
+        If 'auto' (default), FFT is used for N>=3000 and Barnes-Hut for N<3000, where N is
+        the sample size.
     knn_algo: {'vp-tree', 'annoy'}
         Use exact nearest neighbours with VP trees (as in BH t-SNE) or approximate nearest neighbors
         with Annoy. Default is 'annoy'.
@@ -54,17 +55,19 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
     late_exag_coeff: double
         Coefficient for late exaggeration. Set to -1 in order not to use late exaggeration.
         Default -1.
-    start_late_exag_iter:
-        When to start late exaggeration. Set to -1 in order not to use late exaggeration.
-        Default -1.
+    start_late_exag_iter: int or 'auto'
+        When to start late exaggeration. Default 'auto'; it sets start_late_exag_iter to -1 meaning
+        that late exaggeration is not used, unless late_exag_coeff>0. In that case start_late_exag_iter
+        is set to stop_early_exag_iter.
     momentum: double
         Initial value of momentum. Default 0.5.
     final_momentum: double
         The value of momentum to use later in the optimisation. Default 0.8.
     mom_switch_iter: int
         Iteration number to switch from momentum to final_momentum. Default 250.
-    learning_rate: double
-        Learning rate. Default 200.
+    learning_rate: double or 'auto'
+        Learning rate. Default 'auto'; it sets learning rate to N/12 where N is the sample size,
+        or to 200 if N/12 < 200.
     no_mometum_during_exag: boolean
         Whether to switch off momentum during the early exaggeration phase (can be useful
         for experiments with large exaggeration coefficients). Default is False.
@@ -93,8 +96,8 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
     seed: int
         Seed for random initialisation. Use -1 to initialise random number generator with current time.
         Default -1.
-    initialization: numpy aray
-         N x no_dims array to intialize the solution. Default: None.
+    initialization: 'random', 'pca', or numpy array
+         N x no_dims array to intialize the solution. Default: 'pca'.
     load_affinities: {'load', 'save', None}
         If 'save', input similarities (p_ij) are saved into a file. If 'load', they are loaded from a file
         and not recomputed. If None, they are not saved and not loaded. Default is None.
@@ -102,7 +105,7 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
         A list of perplexities to used as a perplexity combination. Input affinities are computed with each
         perplexity on the list and then averaged. Default is None.
     nthreads: int
-        Number of threads to use. Default is None (i.e. use all available threads).
+        Number of threads to use. Default is -1, i.e. use all available threads.
     df: double
         Controls the degree of freedom of t-distribution. Must be positive. The actual degree of
         freedom is 2*df-1. The standard t-SNE choice of 1 degree of freedom corresponds to df=1.
@@ -127,6 +130,23 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
     # X should be a numpy array of 64-bit doubles
     X = np.array(X).astype(float)
 
+    if learning_rate == 'auto':
+        learning_rate = np.max((200, X.shape[0]/12))
+
+    if start_late_exag_iter == 'auto':
+        if late_exag_coeff > 0:
+            start_late_exag_iter = stop_early_exag_iter
+        else:
+            start_late_exag_iter = -1
+
+    if isinstance(initialization, str) and initialization == 'pca':
+        from sklearn.decomposition import PCA
+        solver = 'arpack' if X.shape[1]>map_dims else 'auto'
+        pca = PCA(n_components=map_dims, svd_solver=solver)
+        initialization = pca.fit_transform(X)
+        initialization /= np.std(initialization[:,0])
+        initialization *= 0.0001
+
     if perplexity_list is not None:
         perplexity = 0                # C++ requires perplexity=0 in order to use perplexity_list
 
@@ -141,15 +161,25 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
         else:
             search_k = K * n_trees
         
+    if nbody_algo == 'auto':
+        if X.shape[0] < 3000:
+            nbody_algo = 'Barnes-Hut'
+        else:
+            nbody_algo = 'FFT'
+
     if nbody_algo == 'Barnes-Hut':
         nbody_algo = 1
-    else:
+    elif nbody_algo == 'FFT':
         nbody_algo = 2
+    else:
+        raise ValueError("nbody_algo should be 'Barnes-Hut', 'FFT', or 'auto'")
         
     if knn_algo == 'vp-tree':
         knn_algo = 2
-    else:
+    elif knn_algo == 'annoy':
         knn_algo = 1
+    else:
+        raise ValueError("knn_algo should be 'vp-tree' or 'annoy'")
 
     if load_affinities == 'load':
         load_affinities = 1
@@ -158,7 +188,7 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
     else:
         load_affinities = 0
     
-    if nthreads is None:
+    if nthreads == -1:
         nthreads = 0
 
     if no_momentum_during_exag:
@@ -202,9 +232,9 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
         f.write(struct.pack('=d', df))
         f.write(struct.pack('=i', load_affinities))
 
-        if initialization is not None:
-                initialization = np.array(initialization).astype(float)
-                f.write(initialization.tobytes()) 
+        if not isinstance(initialization, str) or initialization != 'random':
+            initialization = np.array(initialization).astype(float)
+            f.write(initialization.tobytes()) 
                
     # run t-sne
     subprocess.call([os.path.dirname(os.path.realpath(__file__)) + 
@@ -222,6 +252,8 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=1000,
         buf = f.read(sz*max_iter)
         loss = [struct.unpack_from('=d', buf, sz*offset) for offset in range(max_iter)]
         loss = np.array(loss).squeeze()
+        if loss.size==1:
+            loss = loss[np.newaxis]
         loss[np.arange(1,max_iter+1)%50>0] = np.nan
 
     if return_loss:
