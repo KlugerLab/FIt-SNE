@@ -358,7 +358,6 @@ void SPTree::computeNonEdgeForces(unsigned int point_index, double theta, double
 void SPTree::computeEdgeForces(unsigned int *row_P, unsigned int *col_P, double *val_P, int N, double *pos_f, unsigned int nthreads) {
     // Loop over all edges in the graph
     
-    // THIS PARALLEL_FOR DOES NOT WORK! COMPILES AND RUNS BUT THE EMBEDDING IS MEANINGLESS WITH NTHREADS>1
     PARALLEL_FOR(nthreads, N, {
         unsigned int ind1 = loop_i * dimension;
 
