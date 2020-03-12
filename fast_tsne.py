@@ -131,7 +131,7 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=750,
     X = np.array(X).astype(float)
 
     if learning_rate == 'auto':
-        learning_rate = np.max((200, X.shape[0]/12))
+        learning_rate = np.max((200, X.shape[0]/early_exag_coeff))
 
     if start_late_exag_iter == 'auto':
         if late_exag_coeff > 0:
