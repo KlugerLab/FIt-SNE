@@ -62,7 +62,7 @@ public:
 private:
     double current_sum_Q;
     void computeGradient(double *P, unsigned int *inp_row_P, unsigned int *inp_col_P, double *inp_val_P, double *Y,
-                         int N, int D, double *dC, double theta);
+                         int N, int D, double *dC, double theta, unsigned int nthreads);
 
     void computeFftGradientVariableDf(double *P, unsigned int *inp_row_P, unsigned int *inp_col_P, double *inp_val_P, double *Y,
                                 int N, int D, double *dC, int n_interpolation_points, double intervals_per_integer,

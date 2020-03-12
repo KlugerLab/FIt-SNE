@@ -463,12 +463,12 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
                 }
             } else if (nbody_algorithm == 1) {
                 // Otherwise, compute the negative gradient using the Barnes-Hut approximation
-                computeGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta);
+                computeGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta, nthreads);
             }
         }
 
         if (measure_accuracy) {
-            computeGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta);
+            computeGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta, nthreads);
             computeFftGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, nterms, intervals_per_integer,
                                min_num_intervals, nthreads);
             computeExactGradientTest(Y, N, no_dims,df);
@@ -562,7 +562,7 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
 
 // Compute gradient of the t-SNE cost function (using Barnes-Hut algorithm)
 void TSNE::computeGradient(double *P, unsigned int *inp_row_P, unsigned int *inp_col_P, double *inp_val_P, double *Y,
-                           int N, int D, double *dC, double theta) {
+                           int N, int D, double *dC, double theta, unsigned int nthreads) {
     // Construct space-partitioning tree on current map
     SPTree *tree = new SPTree(D, Y, N);
 
@@ -570,13 +570,19 @@ void TSNE::computeGradient(double *P, unsigned int *inp_row_P, unsigned int *inp
     double sum_Q = .0;
     double *pos_f = (double *) calloc(N * D, sizeof(double));
     double *neg_f = (double *) calloc(N * D, sizeof(double));
-    if (pos_f == NULL || neg_f == NULL) {
+    double *Q = (double *) calloc(N, sizeof(double));
+    if (pos_f == NULL || neg_f == NULL || Q == NULL) {
         printf("Memory allocation failed!\n");
         exit(1);
     }
-    tree->computeEdgeForces(inp_row_P, inp_col_P, inp_val_P, N, pos_f);
-    for (int n = 0; n < N; n++) {
-        tree->computeNonEdgeForces(n, theta, neg_f + n * D, &sum_Q);
+    tree->computeEdgeForces(inp_row_P, inp_col_P, inp_val_P, N, pos_f, nthreads);
+
+    PARALLEL_FOR(nthreads, N, {
+        tree->computeNonEdgeForces(loop_i, theta, neg_f + loop_i * D, Q + loop_i);
+    });
+
+    for (int i=0; i<N; i++) {
+        sum_Q += Q[i];
     }
 
     // Compute final t-SNE gradient

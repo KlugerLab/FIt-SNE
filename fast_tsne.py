@@ -162,7 +162,7 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=750,
             search_k = K * n_trees
         
     if nbody_algo == 'auto':
-        if X.shape[0] < 3000:
+        if X.shape[0] < 8000:
             nbody_algo = 'Barnes-Hut'
         else:
             nbody_algo = 'FFT'
