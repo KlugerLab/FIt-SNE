@@ -16,7 +16,7 @@ import struct
 import numpy as np
 
 def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=750, 
-              stop_early_exag_iter=250, K=-1, sigma=-1, nbody_algo='auto', knn_algo='annoy',
+              stop_early_exag_iter=250, K=-1, sigma=-1, nbody_algo='FFT', knn_algo='annoy',
               mom_switch_iter=250, momentum=.5, final_momentum=.8, learning_rate='auto',
               early_exag_coeff=12, no_momentum_during_exag=False, n_trees=50, 
               search_k=None, start_late_exag_iter='auto', late_exag_coeff=-1,
@@ -41,10 +41,9 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=750,
         Number of embedding dimensions. Default 2. FIt-SNE supports only 1 or 2 dimensions.
     max_iter: int
         Number of gradient descent iterations. Default 750.
-    nbody_algo: {'Barnes-Hut', 'FFT', 'auto'}
-        If theta is nonzero, this determins whether to use FIt-SNE or Barnes-Hut approximation.
-        If 'auto' (default), FFT is used for N>=3000 and Barnes-Hut for N<3000, where N is
-        the sample size.
+    nbody_algo: {'Barnes-Hut', 'FFT'}
+        If theta is nonzero, this determines whether to use FIt-SNE (default) or 
+        Barnes-Hut approximation.
     knn_algo: {'vp-tree', 'annoy'}
         Use exact nearest neighbours with VP trees (as in BH t-SNE) or approximate nearest neighbors
         with Annoy. Default is 'annoy'.
@@ -161,18 +160,20 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=750,
         else:
             search_k = K * n_trees
         
-    if nbody_algo == 'auto':
-        if X.shape[0] < 8000:
-            nbody_algo = 'Barnes-Hut'
-        else:
-            nbody_algo = 'FFT'
+# Not much of a speed up, at least on some machines, so I'm removing it.
+#
+#    if nbody_algo == 'auto':
+#        if X.shape[0] < 8000:
+#            nbody_algo = 'Barnes-Hut'
+#        else:
+#            nbody_algo = 'FFT'
 
     if nbody_algo == 'Barnes-Hut':
         nbody_algo = 1
     elif nbody_algo == 'FFT':
         nbody_algo = 2
     else:
-        raise ValueError("nbody_algo should be 'Barnes-Hut', 'FFT', or 'auto'")
+        raise ValueError("nbody_algo should be 'Barnes-Hut' or 'FFT'")
         
     if knn_algo == 'vp-tree':
         knn_algo = 2
