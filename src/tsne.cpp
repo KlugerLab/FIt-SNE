@@ -121,7 +121,8 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
               int nbody_algorithm, int knn_algo, double early_exag_coeff, double *costs,
               bool no_momentum_during_exag, int start_late_exag_iter, double late_exag_coeff, int n_trees, int search_k,
               int nterms, double intervals_per_integer, int min_num_intervals, unsigned int nthreads, 
-              int load_affinities, int perplexity_list_length, double *perplexity_list, double df) {
+              int load_affinities, int perplexity_list_length, double *perplexity_list, double df,
+              double max_step_norm) {
 
     // Some logging messages
     if (N - 1 < 3 * perplexity) {
@@ -490,10 +491,41 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
         } else {
             for (int i = 0; i < N * no_dims; i++)
                 gains[i] = (sign(dY[i]) != sign(uY[i])) ? (gains[i] + .2) : (gains[i] * .8);
-            for (int i = 0; i < N * no_dims; i++) if (gains[i] < .01) gains[i] = .01;
+            for (int i = 0; i < N * no_dims; i++) if (gains[i] < .1) gains[i] = .1;
             for (int i = 0; i < N * no_dims; i++) uY[i] = momentum * uY[i] - learning_rate * gains[i] * dY[i];
+
+	    // Clip the step sizes if max_step_norm is provided
+            if (max_step_norm > 0) {
+                for (int i=0; i<N; i++) {
+                    double step = 0;
+                    for (int j=0; j<no_dims; j++) {
+                        step += uY[i*no_dims + j] * uY[i*no_dims + j];
+                    }
+                    step = sqrt(step);
+                    if (step > max_step_norm) {
+                        for (int j=0; j<no_dims; j++) {
+                            uY[i*no_dims + j] *= (max_step_norm/step);
+                        }
+		    }
+	        }
+            }
+
             for (int i = 0; i < N * no_dims; i++) Y[i] = Y[i] + uY[i];
         }
+
+	/* // Print step norms (for debugging)
+	double maxstepnorm = 0;
+	for (int i=0; i<N; i++) {
+		double step = 0;
+		for (int j=0; j<no_dims; j++) {
+			step += uY[i*no_dims + j] * uY[i*no_dims + j];
+		}
+		step = sqrt(step);
+		if (step > maxstepnorm) {
+			maxstepnorm = step;
+		}
+	}
+	printf("%d: %f\n", iter, maxstepnorm); */
 
         // Make solution zero-mean
         zeroMean(Y, N, no_dims);
@@ -1868,7 +1900,8 @@ bool TSNE::load_data(const char *data_path, double **data, double **Y, int *n,
 	int *start_late_exag_iter, double *late_exag_coeff, int *nterms,
 	double *intervals_per_integer, int *min_num_intervals,
 	bool *skip_random_init, int *load_affinities,
-    int *perplexity_list_length, double **perplexity_list, double * df) {
+    int *perplexity_list_length, double **perplexity_list, double * df,
+        double *max_step_norm) {
 
 	FILE *h;
 	if((h = fopen(data_path, "r+b")) == NULL) {
@@ -1902,6 +1935,7 @@ bool TSNE::load_data(const char *data_path, double **data, double **Y, int *n,
 	result = fread(momentum, sizeof(double),1,h);               // initial momentum
 	result = fread(final_momentum, sizeof(double),1,h);         // final momentum
 	result = fread(learning_rate, sizeof(double),1,h);          // learning rate
+	result = fread(max_step_norm, sizeof(double),1,h);          // max step norm
 	result = fread(K, sizeof(int),1,h);                         // number of neighbours to compute
 	result = fread(sigma, sizeof(double),1,h);                  // input kernel width
 	result = fread(nbody_algo, sizeof(int),1,h);                // Barnes-Hut or FFT
@@ -1953,14 +1987,15 @@ bool TSNE::load_data(const char *data_path, double **data, double **Y, int *n,
 			"\t perplexity %lf, no_dims %d, max_iter %d,\n"
 			"\t stop_lying_iter %d, mom_switch_iter %d,\n"
             "\t momentum %lf, final_momentum %lf,\n"
-            "\t learning_rate %lf, K %d, sigma %lf, nbody_algo %d,\n"
+            "\t learning_rate %lf, max_step_norm %lf,\n"
+            "\t K %d, sigma %lf, nbody_algo %d,\n"
 			"\t knn_algo %d, early_exag_coeff %lf,\n"
 			"\t no_momentum_during_exag %d, n_trees %d, search_k %d,\n"
 			"\t start_late_exag_iter %d, late_exag_coeff %lf\n"
 			"\t nterms %d, interval_per_integer %lf, min_num_intervals %d, t-dist df %lf\n",
 			*n, *d, *theta, *perplexity,
 			*no_dims, *max_iter,*stop_lying_iter,
-            *mom_switch_iter, *momentum, *final_momentum, *learning_rate,
+            *mom_switch_iter, *momentum, *final_momentum, *learning_rate, *max_step_norm,
 			*K, *sigma, *nbody_algo, *knn_algo, *early_exag_coeff,
 			*no_momentum_during_exag, *n_trees, *search_k,
 			*start_late_exag_iter, *late_exag_coeff,
@@ -2010,7 +2045,7 @@ int main(int argc, char *argv[]) {
 	int N, D, no_dims, max_iter, stop_lying_iter;
 	int K, nbody_algo, knn_algo, no_momentum_during_exag;
         int mom_switch_iter;
-        double momentum, final_momentum, learning_rate;
+        double momentum, final_momentum, learning_rate, max_step_norm;
 	int n_trees, search_k, start_late_exag_iter;
 	double sigma, early_exag_coeff, late_exag_coeff;
 	double perplexity, theta, *data, *initial_data;
@@ -2067,7 +2102,7 @@ int main(int argc, char *argv[]) {
 				&n_trees, &search_k, &start_late_exag_iter,
 				&late_exag_coeff, &nterms, &intervals_per_integer,
 				&min_num_intervals, &skip_random_init, &load_affinities,
-                &perplexity_list_length, &perplexity_list, &df)) {
+                &perplexity_list_length, &perplexity_list, &df, &max_step_norm)) {
 
 		bool no_momentum_during_exag_bool = true;
 		if (no_momentum_during_exag == 0) no_momentum_during_exag_bool = false;
@@ -2080,7 +2115,7 @@ int main(int argc, char *argv[]) {
 				stop_lying_iter, mom_switch_iter, momentum, final_momentum, learning_rate, K, sigma, nbody_algo, knn_algo, 
                 early_exag_coeff, costs, no_momentum_during_exag_bool, start_late_exag_iter, late_exag_coeff, n_trees,search_k, 
 				nterms, intervals_per_integer, min_num_intervals, nthreads, load_affinities,
-                perplexity_list_length, perplexity_list, df);
+                perplexity_list_length, perplexity_list, df, max_step_norm);
 
 		if (error_code < 0) {
 			exit(error_code);

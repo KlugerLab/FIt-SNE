@@ -22,7 +22,8 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=750,
               search_k=None, start_late_exag_iter='auto', late_exag_coeff=-1,
               nterms=3, intervals_per_integer=1, min_num_intervals=50,            
               seed=-1, initialization='pca', load_affinities=None,
-              perplexity_list=None, df=1, return_loss=False, nthreads=-1):
+              perplexity_list=None, df=1, return_loss=False, nthreads=-1,
+              max_step_norm=5):
     """Run t-SNE. This implementation supports exact t-SNE, Barnes-Hut t-SNE and FFT-accelerated
     interpolation-based t-SNE (FIt-SNE). This is a Python wrapper to a C++ executable.
 
@@ -67,6 +68,10 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=750,
     learning_rate: double or 'auto'
         Learning rate. Default 'auto'; it sets learning rate to N/12 where N is the sample size,
         or to 200 if N/12 < 200.
+    max_step_norm: double or 'none' (default: 5)
+        Maximum distance that a point is allowed to move on one iteration. Larger steps are clipped 
+        to this value. This prevents possible instabilities during gradient descent. 
+        Set to 'none' to switch it off.
     no_mometum_during_exag: boolean
         Whether to switch off momentum during the early exaggeration phase (can be useful
         for experiments with large exaggeration coefficients). Default is False.
@@ -192,6 +197,9 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=750,
     if nthreads == -1:
         nthreads = 0
 
+    if max_step_norm == 'none':
+        max_step_norm = -1;
+
     if no_momentum_during_exag:
         no_momentum_during_exag = 1
     else:
@@ -215,6 +223,7 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=750,
         f.write(struct.pack('=d', momentum))
         f.write(struct.pack('=d', final_momentum))
         f.write(struct.pack('=d', learning_rate))
+        f.write(struct.pack('=d', max_step_norm))
         f.write(struct.pack('=i', K))
         f.write(struct.pack('=d', sigma))
         f.write(struct.pack('=i', nbody_algo))
