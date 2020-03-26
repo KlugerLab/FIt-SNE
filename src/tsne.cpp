@@ -491,7 +491,7 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
         } else {
             for (int i = 0; i < N * no_dims; i++)
                 gains[i] = (sign(dY[i]) != sign(uY[i])) ? (gains[i] + .2) : (gains[i] * .8);
-            for (int i = 0; i < N * no_dims; i++) if (gains[i] < .1) gains[i] = .1;
+            for (int i = 0; i < N * no_dims; i++) if (gains[i] < .01) gains[i] = .01;
             for (int i = 0; i < N * no_dims; i++) uY[i] = momentum * uY[i] - learning_rate * gains[i] * dY[i];
 
 	    // Clip the step sizes if max_step_norm is provided
