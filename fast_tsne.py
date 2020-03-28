@@ -66,8 +66,8 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=750,
     mom_switch_iter: int
         Iteration number to switch from momentum to final_momentum. Default 250.
     learning_rate: double or 'auto'
-        Learning rate. Default 'auto'; it sets learning rate to N/12 where N is the sample size,
-        or to 200 if N/12 < 200.
+        Learning rate. Default 'auto'; it sets learning rate to N/early_exag_coeff where N is the sample size,
+        or to 200 if N/early_exag_coeff < 200.
     max_step_norm: double or 'none' (default: 5)
         Maximum distance that a point is allowed to move on one iteration. Larger steps are clipped 
         to this value. This prevents possible instabilities during gradient descent. 
@@ -146,7 +146,7 @@ def fast_tsne(X, theta=.5, perplexity=30, map_dims=2, max_iter=750,
     if isinstance(initialization, str) and initialization == 'pca':
         from sklearn.decomposition import PCA
         solver = 'arpack' if X.shape[1]>map_dims else 'auto'
-        pca = PCA(n_components=map_dims, svd_solver=solver)
+        pca = PCA(n_components=map_dims, svd_solver=solver, random_seed=seed if seed!=-1 else None)
         initialization = pca.fit_transform(X)
         initialization /= np.std(initialization[:,0])
         initialization *= 0.0001
