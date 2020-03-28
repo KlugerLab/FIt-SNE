@@ -34,9 +34,6 @@ message("FIt-SNE root directory was set to ",  FAST_TSNE_SCRIPT_DIR)
 #        case, start_late_exag_iter is set to stop_early_exag_iter. Otherwise,
 #        set to equal the iteration at which late exaggeration should begin.
 #          Default 'auto'
-#       start_late_exag_iter - When to start late
-#           exaggeration. set to -1 to not use late exaggeration
-#           Default -1.
 #       late_exag_coeff - Late exaggeration coefficient.
 #          Set to -1 to not use late exaggeration.
 #           Default -1

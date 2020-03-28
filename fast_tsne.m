@@ -15,7 +15,7 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
 %                       this determins the accuracy of BH approximation.
 %                       Default 0.5.
 %                   opts.max_iter - Number of iterations of t-SNE to run.
-%                       Default 1000.
+%                       Default 750.
 %                   opts.nbody_algo - if theta is nonzero, this determins whether to
 %                        use FIt-SNE or Barnes Hut approximation. Default is FIt-SNE.
 %                        set to be 'bh' for Barnes Hut
@@ -23,14 +23,31 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
 %                        set to be 'vptree' for vp-trees
 %                   opts.early_exag_coeff - coefficient for early exaggeration
 %                       (>1). Default 12.
-%                   opts.stop_early_exag_iter - When to switch off early exaggeration.
-%                       Default 250.
+%                   opts.stop_early_exag_iter - When to switch off early
+%                     exaggeration.  
+%                      Default 250.  
+%                   opts.start_late_exag_iter - When to start late exaggeration.
+%                   'auto' means that late exaggeration is not used, unless
+%                   late_exag_coeff>0. In that case, start_late_exag_iter is
+%                   set to stop_early_exag_iter.  Otherwise, set to equal the
+%                   iteration at which late exaggeration should begin.
+%                     Default: 'auto'
 %                   opts.start_late_exag_iter - When to start late
 %                       exaggeration. set to -1 to not use late exaggeration
 %                       Default -1.
 %                   opts.late_exag_coeff - Late exaggeration coefficient.
 %                      Set to -1 to not use late exaggeration.
 %                       Default -1
+%                   opts.learning_rate - Set to desired learning rate or 'auto',
+%                      which sets learning rate to N/early_exag_coeff where
+%                      N is the sample size, or to 200 if N/early_exag_coeff
+%                      < 200.  
+%                       Default 'auto'
+%                   opts.max_step_norm -  Maximum distance that a point is
+%                      allowed to move on one iteration. Larger steps are clipped
+%                      to this value. This prevents possible instabilities during
+%                      gradient descent.  Set to -1 to switch it off. 
+%                       Default: 5
 %                   opts.no_momentum_during_exag - Set to 0 to use momentum
 %                       and other optimization tricks. 1 to do plain,vanilla
 %                       gradient descent (useful for testing large exaggeration
@@ -54,15 +71,17 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
 %                   opts.K - Number of nearest neighbours to get when using fixed sigma
 %                        Default -30 (None)
 %
-%                   opts.initialization - N x no_dims array to intialize the solution
-%                        Default: None
+%                   opts.initialization - 'pca', 'random', or N x no_dims array
+%                   to intialize the solution
+%                        Default: 'pca'
 %
 %                   opts.load_affinities - can be 'load', 'save', or 'none' (default)
 %                        If 'save', input similarities are saved into a file.
 %                        If 'load', input similarities are loaded from a file and not computed
 %
-%                   opts.perplexity_list - if perplexity==0 then perplexity combination will
-%                        be used with values taken from perplexity_list. Default: []
+%                   opts.perplexity_list - if perplexity==0 then perplexity
+%                   combination will be used with values taken from
+%                   perplexity_list. Default: []
 %                   opts.df - Degree of freedom of t-distribution, must be greater than 0.
 %                        Values smaller than 1 correspond to heavier tails, which can often 
 %                        resolve substructure in the embedding. See Kobak et al. (2019) for
@@ -112,10 +131,11 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
     p.mom_switch_iter = 250;
     p.momentum = .5;
     p.final_momentum = .8;
-    p.learning_rate = 200;
-    p.max_iter = 1000;
+    p.learning_rate = 'auto';
+    p.max_step_norm = 5;
+    p.max_iter = 750;
     p.early_exag_coeff = 12;
-    p.start_late_exag_iter = -1;
+    p.start_late_exag_iter = 'auto';
     p.late_exag_coeff = -1;
     p.rand_seed = -1;
     p.nbody_algo = 2;
@@ -131,7 +151,7 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
     p.nthreads = 0;
     p.df = 1;
     p.search_k = [];
-    p.initialization = NaN;
+    p.initialization = 'auto';
     p.load_affinities = 0;
 
 
@@ -148,6 +168,32 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
             end
         end
 
+    end
+
+    if strcmpi(p.learning_rate,'auto')
+        p.learning_rate = max(200, size(X,1)/p.early_exag_coeff)
+    end
+
+    if strcmpi(p.start_late_exag_iter,'auto')
+        if p.late_exag_coeff > 0
+            p.start_late_exag_iter = p.stop_early_exag_iter
+        else
+            p.start_late_exag_iter = -1
+        end
+    end
+
+    if strcmpi(p.initialization,'auto')
+        if p.rand_seed>0
+            rng(p.rand_seed)
+        end
+        X_c = mean(X ,1);
+        X_c = bsxfun(@minus,X,X_c);
+        p.no_dims = 2
+        [U, S,V ] = svds(X_c, p.no_dims);
+        PCs = U * S;
+        p.initialization = 0.0001*(PCs/std(PCs(:,1))) 
+    elseif strcmpi(p.initialization,'random')
+            p.initialization = NaN;
     end
 
     % parse some optional text labels
@@ -202,7 +248,7 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
         p.stop_early_exag_iter, p.K, p.sigma, p.nbody_algo, p.no_momentum_during_exag, p.knn_algo,...
         p.early_exag_coeff, p.n_trees, p.search_k, p.start_late_exag_iter, p.late_exag_coeff, p.rand_seed,...
         p.nterms, p.intervals_per_integer, p.min_num_intervals, p.initialization, p.load_affinities, ...
-        p.perplexity_list, p.mom_switch_iter, p.momentum, p.final_momentum, p.learning_rate,p.df);
+        p.perplexity_list, p.mom_switch_iter, p.momentum, p.final_momentum, p.learning_rate,p.max_step_norm,p.df);
 
     disp('Data written');
     tic
@@ -224,7 +270,7 @@ function write_data(filename, X, no_dims, theta, perplexity, max_iter,...
     stop_lying_iter, K, sigma, nbody_algo, no_momentum_during_exag, knn_algo,...
     early_exag_coeff, n_trees, search_k, start_late_exag_iter, late_exag_coeff, rand_seed,...
     nterms, intervals_per_integer, min_num_intervals, initialization, load_affinities, ...
-    perplexity_list, mom_switch_iter, momentum, final_momentum, learning_rate,df)
+    perplexity_list, mom_switch_iter, momentum, final_momentum, learning_rate,max_step_norm,df)
 
     [n, d] = size(X);
 
@@ -244,6 +290,7 @@ function write_data(filename, X, no_dims, theta, perplexity, max_iter,...
     fwrite(h, momentum, 'double');
     fwrite(h, final_momentum, 'double');
     fwrite(h, learning_rate, 'double');
+    fwrite(h, max_step_norm, 'double');
     fwrite(h, K, 'int');
     fwrite(h, sigma, 'double');
     fwrite(h, nbody_algo, 'int');
