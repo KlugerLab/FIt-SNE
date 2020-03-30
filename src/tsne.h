@@ -45,7 +45,7 @@ public:
             int nbody_algorithm, int knn_algo, double early_exag_coeff, double *costs,
             bool no_momentum_during_exag, int start_late_exag_iter, double late_exag_coeff, int n_trees, int search_k,
             int nterms, double intervals_per_integer, int min_num_intervals, unsigned int nthreads, int load_affinities,
-            int perplexity_list_length, double *perplexity_list, double df );
+            int perplexity_list_length, double *perplexity_list, double df, double max_step_norm);
 
     bool load_data(const char *data_path, double **data, double **Y, int *n, int *d, int *no_dims, double *theta,
             double *perplexity, int *rand_seed, int *max_iter, int *stop_lying_iter, 
@@ -53,7 +53,7 @@ public:
             int *nbody_algo, int *knn_algo, double* early_exag_coeff,  int *no_momentum_during_exag, int *n_trees,
             int *search_k, int *start_late_exag_iter, double *late_exag_coeff, int *nterms,
             double *intervals_per_integer, int *min_num_intervals, bool *skip_random_init, int *load_affinities,
-            int *perplexity_list_length, double **perplexity_list,double *df);
+            int *perplexity_list_length, double **perplexity_list, double *df, double *max_step_norm);
 
     void save_data(const char *result_path, double *data, double *costs, int n, int d, int max_iter);
 
@@ -62,7 +62,7 @@ public:
 private:
     double current_sum_Q;
     void computeGradient(double *P, unsigned int *inp_row_P, unsigned int *inp_col_P, double *inp_val_P, double *Y,
-                         int N, int D, double *dC, double theta);
+                         int N, int D, double *dC, double theta, unsigned int nthreads);
 
     void computeFftGradientVariableDf(double *P, unsigned int *inp_row_P, unsigned int *inp_col_P, double *inp_val_P, double *Y,
                                 int N, int D, double *dC, int n_interpolation_points, double intervals_per_integer,

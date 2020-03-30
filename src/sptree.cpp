@@ -37,6 +37,7 @@
 #include <stdio.h>
 #include <cmath>
 #include "sptree.h"
+#include "parallel_for.h"
 
 
 // Constructs cell
@@ -166,8 +167,6 @@ void SPTree::init(SPTree *inp_parent, unsigned int D, double *inp_data, double *
 
     center_of_mass = (double *) malloc(D * sizeof(double));
     for (unsigned int d = 0; d < D; d++) center_of_mass[d] = .0;
-
-    buff = (double *) malloc(D * sizeof(double));
 }
 
 
@@ -178,7 +177,6 @@ SPTree::~SPTree() {
     }
     free(children);
     free(center_of_mass);
-    free(buff);
     delete boundary;
 }
 
@@ -332,8 +330,7 @@ void SPTree::computeNonEdgeForces(unsigned int point_index, double theta, double
     // Compute distance between point and center-of-mass
     double D = .0;
     unsigned int ind = point_index * dimension;
-    for (unsigned int d = 0; d < dimension; d++) buff[d] = data[ind + d] - center_of_mass[d];
-    for (unsigned int d = 0; d < dimension; d++) D += buff[d] * buff[d];
+    for (unsigned int d = 0; d < dimension; d++) D += (data[ind + d] - center_of_mass[d]) * (data[ind + d] - center_of_mass[d]);
 
     // Check whether we can use this node as a "summary"
     double max_width = 0.0;
@@ -348,7 +345,7 @@ void SPTree::computeNonEdgeForces(unsigned int point_index, double theta, double
         double mult = cum_size * D;
         *sum_Q += mult;
         mult *= D;
-        for (unsigned int d = 0; d < dimension; d++) neg_f[d] += mult * buff[d];
+        for (unsigned int d = 0; d < dimension; d++) neg_f[d] += mult * (data[ind + d] - center_of_mass[d]);
     } else {
         // Recursively apply Barnes-Hut to children
         for (unsigned int i = 0; i < no_children; i++)
@@ -358,25 +355,23 @@ void SPTree::computeNonEdgeForces(unsigned int point_index, double theta, double
 
 
 // Computes edge forces
-void SPTree::computeEdgeForces(unsigned int *row_P, unsigned int *col_P, double *val_P, int N, double *pos_f) {
+void SPTree::computeEdgeForces(unsigned int *row_P, unsigned int *col_P, double *val_P, int N, double *pos_f, unsigned int nthreads) {
     // Loop over all edges in the graph
-    unsigned int ind1 = 0;
-    unsigned int ind2 = 0;
-    double D;
-    for (unsigned int n = 0; n < N; n++) {
-        for (unsigned int i = row_P[n]; i < row_P[n + 1]; i++) {
+    
+    PARALLEL_FOR(nthreads, N, {
+        unsigned int ind1 = loop_i * dimension;
+
+        for (unsigned int i = row_P[loop_i]; i < row_P[loop_i + 1]; i++) {
             // Compute pairwise distance and Q-value
-            D = 1.0;
-            ind2 = col_P[i] * dimension;
-            for (unsigned int d = 0; d < dimension; d++) buff[d] = data[ind1 + d] - data[ind2 + d];
-            for (unsigned int d = 0; d < dimension; d++) D += buff[d] * buff[d];
+            double D = 1.0;
+            unsigned int ind2 = col_P[i] * dimension;
+            for (unsigned int d = 0; d < dimension; d++) D += (data[ind1 + d] - data[ind2 + d]) * (data[ind1 + d] - data[ind2 + d]);
             D = val_P[i] / D;
 
             // Sum positive force
-            for (unsigned int d = 0; d < dimension; d++) pos_f[ind1 + d] += D * buff[d];
+            for (unsigned int d = 0; d < dimension; d++) pos_f[ind1 + d] += D * (data[ind1 + d] - data[ind2 + d]);
         }
-        ind1 += dimension;
-    }
+    });
 }
 
 

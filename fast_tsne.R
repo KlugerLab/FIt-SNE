@@ -15,8 +15,8 @@ message("FIt-SNE root directory was set to ",  FAST_TSNE_SCRIPT_DIR)
 #           this determins the accuracy of BH approximation.
 #           Default 0.5.
 #       max_iter - Number of iterations of t-SNE to run.
-#           Default 1000.
-#       fft_not_bh - if theta is nonzero, this determins whether to
+#           Default 750.
+#       fft_not_bh - if theta is nonzero, this determines whether to
 #            use FIt-SNE or Barnes Hut approximation. Default is FIt-SNE.
 #            set to be True for FIt-SNE
 #       ann_not_vptree - use vp-trees (as in bhtsne) or approximate nearest neighbors (default).
@@ -29,12 +29,22 @@ message("FIt-SNE root directory was set to ",  FAST_TSNE_SCRIPT_DIR)
 #           coefficients)
 #       stop_early_exag_iter - When to switch off early exaggeration.
 #           Default 250.
-#       start_late_exag_iter - When to start late
-#           exaggeration. set to -1 to not use late exaggeration
-#           Default -1.
+#        start_late_exag_iter - When to start late exaggeration. 'auto' means
+#        that late exaggeration is not used, unless late_exag_coeff>0. In that
+#        case, start_late_exag_iter is set to stop_early_exag_iter. Otherwise,
+#        set to equal the iteration at which late exaggeration should begin.
+#          Default 'auto'
 #       late_exag_coeff - Late exaggeration coefficient.
 #          Set to -1 to not use late exaggeration.
 #           Default -1
+#       learning_rate - Set to desired learning rate or 'auto', which
+#       sets learning rate to N/exaggeration_factor where N is the sample size, or to 200 if
+#       N/exaggeration_factor < 200.
+#           Default 'auto'
+#       max_step_norm -  Maximum distance that a point is allowed to move on
+#       one iteration. Larger steps are clipped to this value. This prevents
+#       possible instabilities during gradient descent.  Set to -1 to switch it
+#       off. Default: 5
 #       nterms - If using FIt-SNE, this is the number of
 #                      interpolation points per sub-interval
 #       intervals_per_integer - See min_num_intervals              
@@ -54,8 +64,8 @@ message("FIt-SNE root directory was set to ",  FAST_TSNE_SCRIPT_DIR)
 #       K - Number of nearest neighbours to get when using fixed sigma
 #            Default -30 (None)
 #
-#       initialization - N x no_dims array to intialize the solution
-#            Default: None
+#       initialization -  'pca', 'random', or N x no_dims array to intialize the solution.
+#            Default: 'pca'
 #
 #       load_affinities - 
 #            If 1, input similarities are loaded from a file and not computed
@@ -71,16 +81,16 @@ message("FIt-SNE root directory was set to ",  FAST_TSNE_SCRIPT_DIR)
 #
 fftRtsne <- function(X, 
 		     dims = 2, perplexity = 30, theta = 0.5,
-		     max_iter = 1000,
+		     max_iter = 750,
 		     fft_not_bh = TRUE,
 		     ann_not_vptree = TRUE,
 		     stop_early_exag_iter = 250,
 		     exaggeration_factor = 12.0, no_momentum_during_exag = FALSE,
-		     start_late_exag_iter = -1.0, late_exag_coeff = 1.0,
-         mom_switch_iter = 250, momentum = 0.5, final_momentum = 0.8, learning_rate = 200,
+		     start_late_exag_iter = -1, late_exag_coeff = 1.0,
+         mom_switch_iter = 250, momentum = 0.5, final_momentum = 0.8, learning_rate = 'auto',
 		     n_trees = 50, search_k = -1, rand_seed = -1,
 		     nterms = 3, intervals_per_integer = 1, min_num_intervals = 50, 
-		     K = -1, sigma = -30, initialization = NULL,
+		     K = -1, sigma = -30, initialization = 'pca',max_step_norm = 5,
 		     data_path = NULL, result_path = NULL,
 		     load_affinities = NULL,
 		     fast_tsne_path = NULL, nthreads = 0, perplexity_list = NULL, 
@@ -130,6 +140,47 @@ fftRtsne <- function(X,
     }
   }
 
+        if (is.character(learning_rate) && learning_rate =='auto') {
+            learning_rate = max(200, nrow(X)/exaggeration_factor)
+        }
+        if (is.character(start_late_exag_iter) && start_late_exag_iter =='auto') {
+            if (late_exag_coeff > 0) {
+                start_late_exag_iter = stop_early_exag_iter
+            }else {
+                start_late_exag_iter = -1
+            }
+        }
+
+        if (is.character(initialization) && initialization =='pca') {
+            if (rand_seed != -1)  {
+                set.seed(rand_seed)
+            }
+            if (require(rsvd)) {
+                message('Using rsvd() to compute the top PCs for initialization.')
+                X_c <- scale(X, center=T, scale=F)
+                rsvd_out <- rsvd(X_c, k=dims)
+                X_top_pcs <- rsvd_out$u %*% diag(rsvd_out$d, nrow=dims)
+            }else if(require(irlba)) { 
+                message('Using irlba() to compute the top PCs for initialization.')
+                X_colmeans <- colMeans(X)
+                irlba_out <- irlba(X,nv=dims, center=X_colmeans)
+                X_top_pcs <- irlba_out$u %*% diag(irlba_out$d, nrow=dims)
+            }else{
+                stop("By default, FIt-SNE initializes the embedding with the
+                     top PCs. We use either rsvd or irlba for fast computation.
+                     To use this functionality, please install the rsvd package
+                     with install.packages('rsvd') or the irlba package with
+                     install.packages('ilrba').  Otherwise, set initialization
+                     to NULL for random initialization, or any N by dims matrix
+                     for custom initialization.")
+            }
+                initialization <- 0.0001*(X_top_pcs/sd(X_top_pcs[,1])) 
+
+        }else if (is.character(initialization) && initialization == 'random'){
+            message('Random initialization')
+            initialization = NULL
+        }
+
 	if (fft_not_bh) {
 	  nbody_algo <- 2
 	} else {
@@ -175,6 +226,7 @@ fftRtsne <- function(X,
 	writeBin(as.numeric(momentum), f, size = 8)
 	writeBin(as.numeric(final_momentum), f, size = 8)
 	writeBin(as.numeric(learning_rate), f, size = 8)
+	writeBin(as.numeric(max_step_norm), f, size = 8)
 	writeBin(as.integer(K), f, size = 4) #K
 	writeBin(as.numeric(sigma), f, size = 8) #sigma
 	writeBin(as.integer(nbody_algo), f, size = 4)  #not barnes hut
@@ -193,7 +245,7 @@ fftRtsne <- function(X,
 	writeBin(as.integer(rand_seed), f, size = 4) 
   writeBin(as.numeric(df), f, size = 8)
 	writeBin(as.integer(load_affinities), f, size = 4) 
-	if (!is.null(initialization)) { writeBin( c(t(initialization)), f) }		
+	if (!is.null(initialization) ) { writeBin( c(t(initialization)), f) }		
 	close(f) 
 
 	flag <- system2(command = fast_tsne_path, 
