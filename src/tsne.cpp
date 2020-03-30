@@ -2038,7 +2038,7 @@ void TSNE::save_data(const char *result_path, double* data, double* costs, int n
 
 
 int main(int argc, char *argv[]) {
-        const char version_number[] =  "1.1.0";
+        const char version_number[] =  "1.2.0";
 	printf("=============== t-SNE v%s ===============\n", version_number);
 
 	// Define some variables

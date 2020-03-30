@@ -96,7 +96,7 @@ fftRtsne <- function(X,
 		     fast_tsne_path = NULL, nthreads = 0, perplexity_list = NULL, 
          get_costs = FALSE, df = 1.0) {
   
-  version_number <- '1.1.0'
+  version_number <- '1.2.0'
 
 	if (is.null(fast_tsne_path)) {
 		if (.Platform$OS.type == "unix") {
