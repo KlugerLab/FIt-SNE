@@ -34,7 +34,7 @@ Check out `examples/` for usage. The [Python demo notebook](https://github.com/K
 
 
 ### Windows
-A Windows binary is available [here](https://github.com/KlugerLab/FIt-SNE/releases/download/v1.1.0/FItSNE-Windows-1.1.0.zip). Please extract to the `bin/` folder, and you should be all set.
+A Windows binary is available [here](https://github.com/KlugerLab/FIt-SNE/releases/download/v1.2.1/FItSNE-Windows-1.2.1.zip). Please extract to the `bin/` folder, and you should be all set.
 
 If you would like to compile it yourself see below. The code has been currently tested with MS Visual Studio 2015 (i.e., MS Visual Studio Version 14).
 
