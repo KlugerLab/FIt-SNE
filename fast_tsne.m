@@ -121,7 +121,7 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
 % IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY 
 % OF SUCH DAMAGE.
 
-    version_number = '1.2.0';
+    version_number = '1.2.1';
 
     % default parameters and flags 
     p.perplexity = 30;

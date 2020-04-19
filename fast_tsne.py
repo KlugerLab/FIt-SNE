@@ -169,7 +169,7 @@ def fast_tsne(
         is True.
     """
 
-    version_number = "1.2.0"
+    version_number = "1.2.1"
 
     # X should be a numpy array of 64-bit doubles
     X = np.array(X).astype(float)
