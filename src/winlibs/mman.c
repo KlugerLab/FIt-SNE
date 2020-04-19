@@ -178,3 +178,28 @@ int munlock(const void *addr, size_t len)
     
     return -1;
 }
+#if !defined(__MINGW32__)
+int ftruncate(int fd, unsigned int size) {
+	if (fd < 0) {
+		errno = EBADF;
+		return -1;
+	}
+
+	HANDLE h = (HANDLE)_get_osfhandle(fd);
+	unsigned int cur = SetFilePointer(h, 0, NULL, FILE_CURRENT);
+	if (cur == ~0 || SetFilePointer(h, size, NULL, FILE_BEGIN) == ~0 || !SetEndOfFile(h)) {
+		int error = GetLastError();
+		switch (GetLastError()) {
+		case ERROR_INVALID_HANDLE:
+			errno = EBADF;
+			break;
+		default:
+			errno = EIO;
+			break;
+		}
+		return -1;
+	}
+
+	return 0;
+}
+#endif

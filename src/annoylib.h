@@ -39,7 +39,7 @@ typedef unsigned __int64  uint64_t;
  #ifndef NOMINMAX
   #define NOMINMAX
  #endif
- #include "mman.h"
+ #include "winlibs/mman.h"
  #include <windows.h>
 #else
  #include <sys/mman.h>
@@ -881,7 +881,12 @@ public:
     
   bool on_disk_build(const char* file, char** error=NULL) {
     _on_disk = true;
-    _fd = open(file, O_RDWR | O_CREAT | O_TRUNC, (int) 0600);
+
+#ifdef _WIN32
+	_fd = _open(file, O_RDWR | O_CREAT | O_TRUNC, (int)0600);
+#else
+	_fd = open(file, O_RDWR | O_CREAT | O_TRUNC, (int)0600);
+#endif
     if (_fd == -1) {
       showUpdate("Error: file descriptor is -1\n");
       if (error) *error = strerror(errno);
@@ -981,7 +986,11 @@ public:
       return true;
     } else {
       // Delete file if it already exists (See issue #335)
-      unlink(filename);
+#ifdef _WIN32
+		_unlink(filename);
+#else
+		unlink(filename);
+#endif
 
       printf("path: %s\n", filename);
 
@@ -1022,12 +1031,20 @@ public:
 
   void unload() {
     if (_on_disk && _fd) {
+#ifdef _WIN32
+		_close(_fd);
+#else
       close(_fd);
+#endif
       munmap(_nodes, _s * _nodes_size);
     } else {
       if (_fd) {
         // we have mmapped data
-        close(_fd);
+#ifdef _WIN32
+		  _close(_fd);
+#else
+		  close(_fd);
+#endif
         munmap(_nodes, _n_nodes * _s);
       } else if (_nodes) {
         // We have heap allocated data
@@ -1039,14 +1056,22 @@ public:
   }
 
   bool load(const char* filename, bool prefault=false, char** error=NULL) {
-    _fd = open(filename, O_RDONLY, (int)0400);
+#ifdef _WIN32
+	  _fd = _open(filename, O_RDONLY, (int)0400);
+#else
+	  _fd = open(filename, O_RDONLY, (int)0400);
+#endif
     if (_fd == -1) {
       showUpdate("Error: file descriptor is -1\n");
       if (error) *error = strerror(errno);
       _fd = 0;
       return false;
     }
-    off_t size = lseek(_fd, 0, SEEK_END);
+#ifdef _WIN32
+	off_t size = _lseek(_fd, 0, SEEK_END);
+#else
+	off_t size = lseek(_fd, 0, SEEK_END);
+#endif
     if (size == -1) {
       showUpdate("lseek returned -1\n");
       if (error) *error = strerror(errno);

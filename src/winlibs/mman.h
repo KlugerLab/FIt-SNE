@@ -68,9 +68,15 @@ MMANSHARED_EXPORT int     _mprotect(void *addr, size_t len, int prot);
 MMANSHARED_EXPORT int     msync(void *addr, size_t len, int flags);
 MMANSHARED_EXPORT int     mlock(const void *addr, size_t len);
 MMANSHARED_EXPORT int     munlock(const void *addr, size_t len);
-
+#if !defined(__MINGW32__)
+MMANSHARED_EXPORT int ftruncate(int fd, unsigned int size);
+#endif
 #ifdef __cplusplus
 }
 #endif
+
+
+
+
 
 #endif /*  _SYS_MMAN_H_ */
