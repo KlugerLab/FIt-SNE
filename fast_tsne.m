@@ -253,7 +253,7 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
     disp('Data written');
     tic
     %[flag, cmdout] = system(fullfile(tsne_path,'/fast_tsne'), '-echo');
-    cmd = sprintf('%s %s data.dat result.dat %d',fullfile(tsne_path,'/fast_tsne'), version_number, p.nthreads);
+    cmd = sprintf('%s %s data.dat result.dat %d',fullfile(tsne_path,'/FItSNE.exe'), version_number, p.nthreads);
     [flag, cmdout] = system(cmd, '-echo');
     if(flag~=0)
         error(cmdout);
