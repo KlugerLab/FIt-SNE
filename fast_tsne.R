@@ -155,12 +155,12 @@ fftRtsne <- function(X,
             if (rand_seed != -1)  {
                 set.seed(rand_seed)
             }
-            if ("rsvd" %in% installed.packages()) {
+            if ("rsvd" %in% utils::installed.packages()) {
                 message('Using rsvd() to compute the top PCs for initialization.')
                 X_c <- scale(X, center=T, scale=F)
                 rsvd_out <- rsvd::rsvd(X_c, k=dims)
                 X_top_pcs <- rsvd_out$u %*% diag(rsvd_out$d, nrow=dims)
-            }else if("irlba" %in% installed.packages()) { 
+            }else if("irlba" %in% utils::installed.packages()) { 
                 message('Using irlba() to compute the top PCs for initialization.')
                 X_colmeans <- colMeans(X)
                 irlba_out <- irlba::irlba(X,nv=dims, center=X_colmeans)
