@@ -155,12 +155,14 @@ fftRtsne <- function(X,
             if (rand_seed != -1)  {
                 set.seed(rand_seed)
             }
-            if (requireNamespace("rsvd")) {
+            if (tryCatch(requireNamespace("rsvd"),
+                         error = function(e){FALSE})) {
                 message('Using rsvd() to compute the top PCs for initialization.')
                 X_c <- scale(X, center=T, scale=F)
                 rsvd_out <- rsvd(X_c, k=dims)
                 X_top_pcs <- rsvd_out$u %*% diag(rsvd_out$d, nrow=dims)
-            }else if(requireNamespace("irlba")) { 
+            }else if(tryCatch(requireNamespace("irlba"),
+                              error = function(e){FALSE})) { 
                 message('Using irlba() to compute the top PCs for initialization.')
                 X_colmeans <- colMeans(X)
                 irlba_out <- irlba(X,nv=dims, center=X_colmeans)
