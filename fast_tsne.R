@@ -155,17 +155,15 @@ fftRtsne <- function(X,
             if (rand_seed != -1)  {
                 set.seed(rand_seed)
             }
-            if (tryCatch(requireNamespace("rsvd"),
-                         error = function(e){FALSE})) {
+            if ("rsvd" %in% installed.packages()) {
                 message('Using rsvd() to compute the top PCs for initialization.')
                 X_c <- scale(X, center=T, scale=F)
-                rsvd_out <- rsvd(X_c, k=dims)
+                rsvd_out <- rsvd::rsvd(X_c, k=dims)
                 X_top_pcs <- rsvd_out$u %*% diag(rsvd_out$d, nrow=dims)
-            }else if(tryCatch(requireNamespace("irlba"),
-                              error = function(e){FALSE})) { 
+            }else if("irlba" %in% installed.packages()) { 
                 message('Using irlba() to compute the top PCs for initialization.')
                 X_colmeans <- colMeans(X)
-                irlba_out <- irlba(X,nv=dims, center=X_colmeans)
+                irlba_out <- irlba::irlba(X,nv=dims, center=X_colmeans)
                 X_top_pcs <- irlba_out$u %*% diag(irlba_out$d, nrow=dims)
             }else{
                 stop("By default, FIt-SNE initializes the embedding with the
