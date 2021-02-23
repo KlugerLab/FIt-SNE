@@ -155,10 +155,10 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
     if (perplexity > 0 || perplexity_list_length > 0) {
         printf("Using perplexity, so normalizing input data (to prevent numerical problems)\n");
         double max_X = .0;
-        for (int i = 0; i < N * D; i++) {
+        for (unsigned long i = 0; i < N * D; i++) {
             if (fabs(X[i]) > max_X) max_X = fabs(X[i]);
         }
-        for (int i = 0; i < N * D; i++) X[i] /= max_X;
+        for (unsigned long i = 0; i < N * D; i++) X[i] /= max_X;
     } else {
 		printf("Not using perplexity, so data are left un-normalized.\n");
     }
@@ -599,9 +599,10 @@ void TSNE::computeGradient(double *P, unsigned int *inp_row_P, unsigned int *inp
     SPTree *tree = new SPTree(D, Y, N);
 
     // Compute all terms required for t-SNE gradient
+    unsigned long SIZE = (unsigned long) N * (unsigned long) D;
     double sum_Q = .0;
-    double *pos_f = (double *) calloc(N * D, sizeof(double));
-    double *neg_f = (double *) calloc(N * D, sizeof(double));
+    double *pos_f = (double *) calloc(SIZE, sizeof(double));
+    double *neg_f = (double *) calloc(SIZE, sizeof(double));
     double *Q = (double *) calloc(N, sizeof(double));
     if (pos_f == NULL || neg_f == NULL || Q == NULL) {
         printf("Memory allocation failed!\n");
@@ -624,7 +625,7 @@ void TSNE::computeGradient(double *P, unsigned int *inp_row_P, unsigned int *inp
         sprintf(buffer, "temp/bh_gradient%d.txt", itTest);
         fp = fopen(buffer, "w"); // Open file for writing
     }
-    for (int i = 0; i < N * D; i++) {
+    for (unsigned long i = 0; i < N * D; i++) {
         dC[i] = pos_f[i] - (neg_f[i] / sum_Q);
         if (measure_accuracy) {
             if (i < N) {
@@ -647,7 +648,7 @@ void TSNE::computeFftGradientOneDVariableDf(double *P, unsigned int *inp_row_P, 
                                   double *Y, int N, int D, double *dC, int n_interpolation_points,
                                   double intervals_per_integer, int min_num_intervals, unsigned int nthreads, double df) {
     // Zero out the gradient
-    for (int i = 0; i < N * D; i++) dC[i] = 0.0;
+    for (unsigned long i = 0; i < N * D; i++) dC[i] = 0.0;
 
     // Push all the points at which we will evaluate
     // Y is stored row major, with a row corresponding to a single point
@@ -758,7 +759,7 @@ void TSNE::computeFftGradientOneD(double *P, unsigned int *inp_row_P, unsigned i
                                   double *Y, int N, int D, double *dC, int n_interpolation_points,
                                   double intervals_per_integer, int min_num_intervals, unsigned int nthreads) {
     // Zero out the gradient
-    for (int i = 0; i < N * D; i++) dC[i] = 0.0;
+    for (unsigned long i = 0; i < N * D; i++) dC[i] = 0.0;
 
     // Push all the points at which we will evaluate
     // Y is stored row major, with a row corresponding to a single point
@@ -862,7 +863,7 @@ void TSNE::computeFftGradientVariableDf(double *P, unsigned int *inp_row_P, unsi
 
 
     // Zero out the gradient
-    for (int i = 0; i < N * D; i++) dC[i] = 0.0;
+    for (unsigned long i = 0; i < N * D; i++) dC[i] = 0.0;
 
     // For convenience, split the x and y coordinate values
     auto *xs = new double[N];
@@ -1029,7 +1030,7 @@ void TSNE::computeFftGradient(double *P, unsigned int *inp_row_P, unsigned int *
 
 
     // Zero out the gradient
-    for (int i = 0; i < N * D; i++) dC[i] = 0.0;
+    for (unsigned long i = 0; i < N * D; i++) dC[i] = 0.0;
 
     // For convenience, split the x and y coordinate values
     auto *xs = new double[N];
@@ -1230,7 +1231,7 @@ void TSNE::computeExactGradientTest(double *Y, int N, int D, double df ) {
 // Compute the exact gradient of the t-SNE cost function
 void TSNE::computeExactGradient(double *P, double *Y, int N, int D, double *dC, double df) {
     // Make sure the current gradient contains zeros
-    for (int i = 0; i < N * D; i++) dC[i] = 0.0;
+    for (unsigned long i = 0; i < N * D; i++) dC[i] = 0.0;
 
     // Compute the squared Euclidean distance matrix
     auto *DD = (double *) malloc(N * N * sizeof(double));
@@ -1558,10 +1559,10 @@ int TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row
         tree.set_seed(rand_seed);
     }
 
-    for(int i=0; i<N; ++i){
+    for(unsigned long i=0; i<N; ++i){
         double *vec = (double *) malloc( D * sizeof(double) );
 
-        for(int z=0; z<D; ++z){
+        for(unsigned long z=0; z<D; ++z){
             vec[z] = X[i*D+z];
         }
 
@@ -1852,7 +1853,7 @@ void TSNE::zeroMean(double *X, int N, int D) {
     double *mean = (double *) calloc(D, sizeof(double));
     if (mean == NULL) throw std::bad_alloc();
 
-    int nD = 0;
+    unsigned long nD = 0;
     for (int n = 0; n < N; n++) {
         for (int d = 0; d < D; d++) {
             mean[d] += X[nD + d];
@@ -1955,9 +1956,9 @@ bool TSNE::load_data(const char *data_path, double **data, double **Y, int *n,
         exit(1);
     }
 
-	*data = (double*) malloc(*d * *n * sizeof(double));
+	*data = (double*) malloc((unsigned long)*d * (unsigned long) *n * sizeof(double));
 	if(*data == NULL) { printf("Memory allocation failed!\n"); exit(1); }
-	result = fread(*data, sizeof(double), *n * *d, h);          // the data
+	result = fread(*data, sizeof(double), (unsigned long) *n * (unsigned long) *d, h);          // the data
 	if(!feof(h)) {
 		result = fread(rand_seed, sizeof(int), 1, h);       // random seed
 	}
