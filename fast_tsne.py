@@ -14,6 +14,7 @@ import os
 import subprocess
 import struct
 import numpy as np
+import tempfile
 
 
 def fast_tsne(
@@ -250,6 +251,12 @@ def fast_tsne(
     else:
         no_momentum_during_exag = 0
 
+    bin_path = os.path.dirname(os.path.realpath(__file__)) + "/bin/fast_tsne"
+
+    old_dir = os.getcwd()
+    tmpdir = tempfile.TemporaryDirectory()
+    os.chdir(tmpdir.name)
+
     # write data file
     with open(os.getcwd() + "/data.dat", "wb") as f:
         n, d = X.shape
@@ -294,7 +301,7 @@ def fast_tsne(
     # run t-sne
     subprocess.call(
         [
-            os.path.dirname(os.path.realpath(__file__)) + "/bin/fast_tsne",
+            bin_path,
             version_number,
             "data.dat",
             "result.dat",
@@ -321,6 +328,9 @@ def fast_tsne(
         if loss.size == 1:
             loss = loss[np.newaxis]
         loss[np.arange(1, max_iter + 1) % 50 > 0] = np.nan
+
+    os.chdir(old_dir)
+    tmpdir.cleanup()
 
     if return_loss:
         return (x_tsne, loss)
