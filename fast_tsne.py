@@ -14,7 +14,7 @@ import os
 import subprocess
 import struct
 import numpy as np
-
+from datetime import datetime
 
 def fast_tsne(
     X,
@@ -250,8 +250,13 @@ def fast_tsne(
     else:
         no_momentum_during_exag = 0
 
+    # create unique i/o-filenames
+    timestamp = str(datetime.now()) + '-' + str(np.random.randint(0,1000000000))
+    infile = 'data_%s.dat' % timestamp
+    outfile = 'result_%s.dat' % timestamp
+    
     # write data file
-    with open(os.getcwd() + "/data.dat", "wb") as f:
+    with open(os.getcwd() + '/' + infile, 'wb') as f:
         n, d = X.shape
         f.write(struct.pack("=i", n))
         f.write(struct.pack("=i", d))
@@ -296,14 +301,14 @@ def fast_tsne(
         [
             os.path.dirname(os.path.realpath(__file__)) + "/bin/fast_tsne",
             version_number,
-            "data.dat",
-            "result.dat",
+            infile,
+            outfile,
             "{}".format(nthreads),
         ]
     )
 
     # read data file
-    with open(os.getcwd() + "/result.dat", "rb") as f:
+    with open(os.getcwd() + '/' + outfile, 'rb') as f:
         (n,) = struct.unpack("=i", f.read(4))
         (md,) = struct.unpack("=i", f.read(4))
         sz = struct.calcsize("=d")
@@ -321,6 +326,10 @@ def fast_tsne(
         if loss.size == 1:
             loss = loss[np.newaxis]
         loss[np.arange(1, max_iter + 1) % 50 > 0] = np.nan
+        
+    # remove i/o-files
+    os.remove(os.getcwd() + '/' + infile)
+    os.remove(os.getcwd() + '/' + outfile)
 
     if return_loss:
         return (x_tsne, loss)
