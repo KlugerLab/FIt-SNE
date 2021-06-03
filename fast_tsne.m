@@ -171,14 +171,14 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
     end
 
     if strcmpi(p.learning_rate,'auto')
-        p.learning_rate = max(200, size(X,1)/p.early_exag_coeff)
+        p.learning_rate = max(200, size(X,1)/p.early_exag_coeff);
     end
 
     if strcmpi(p.start_late_exag_iter,'auto')
         if p.late_exag_coeff > 0
-            p.start_late_exag_iter = p.stop_early_exag_iter
+            p.start_late_exag_iter = p.stop_early_exag_iter;
         else
-            p.start_late_exag_iter = -1
+            p.start_late_exag_iter = -1;
         end
     end
 
@@ -188,10 +188,10 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
         end
         X_c = mean(X ,1);
         X_c = bsxfun(@minus,X,X_c);
-        p.no_dims = 2
-        [U, S,V ] = svds(X_c, p.no_dims);
+        p.no_dims = 2;
+        [U, S] = svds(X_c, p.no_dims);
         PCs = U * S;
-        p.initialization = 0.0001*(PCs/std(PCs(:,1))) 
+        p.initialization = 0.0001*(PCs/std(PCs(:,1)));
     elseif strcmpi(p.initialization,'random')
             p.initialization = NaN;
     end
@@ -254,7 +254,7 @@ function [mappedX, costs, initialError] = fast_tsne(X, opts)
     tic
     %[flag, cmdout] = system(fullfile(tsne_path,'/fast_tsne'), '-echo');
     if ispc
-        cmd = sprintf('%s %s data.dat result.dat %d',fullfile(tsne_path,'/fast_tsne.exe'), version_number, p.nthreads);
+        cmd = sprintf('%s %s data.dat result.dat %d',fullfile(tsne_path,'/FItSNE.exe'), version_number, p.nthreads);
     else
         cmd = sprintf('%s %s data.dat result.dat %d',fullfile(tsne_path,'/fast_tsne'), version_number, p.nthreads);
     end
