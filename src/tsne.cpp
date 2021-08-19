@@ -1592,7 +1592,7 @@ int TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row
                     [&](const int bi, const int ei, const int t)
                     {
                         // loop over all items
-                        for(int n = bi;n<ei;n++)
+                        for(long int n = bi;n<ei;n++)
                         {
                             // inner loop
                             {
@@ -1618,7 +1618,7 @@ int TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row
 
                                 // Store current row of P in matrix
                                 for(unsigned int m = 0; m < K; m++) {
-                                    col_P[row_P[n] + m] = (unsigned int) closest[m + 1];
+                                    col_P[row_P[n] + m] = (unsigned long int) closest[m + 1];
                                     val_P[row_P[n] + m] = cur_P[m];
                                 }
 
@@ -1640,7 +1640,7 @@ int TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row
 
 
 // Compute input similarities with a fixed perplexity using ball trees (this function allocates memory another function should free)
-void TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row_P, unsigned int **_col_P, 
+void TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned long int **_row_P, unsigned long int **_col_P, 
                                      double **_val_P, double perplexity, int K, double sigma, unsigned int nthreads,
                                      int perplexity_list_length, double *perplexity_list) {
 
@@ -1648,11 +1648,11 @@ void TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_ro
 
     // Allocate the memory we need
     printf("Going to allocate memory. N: %d, K: %d, N*K = %d\n", N, K, N*K);
-    *_row_P = (unsigned int*)    malloc((N + 1) * sizeof(unsigned int));
-    *_col_P = (unsigned int*)    calloc(N * K, sizeof(unsigned int));
+    *_row_P = (unsigned long int*)    malloc((N + 1) * sizeof(unsigned long int));
+    *_col_P = (unsigned int*)    calloc(N * K, sizeof(unsigned long int));
     *_val_P = (double*) calloc(N * K, sizeof(double));
     if(*_row_P == NULL || *_col_P == NULL || *_val_P == NULL) { printf("Memory allocation failed!\n"); exit(1); }
-    unsigned int* row_P = *_row_P;
+    unsigned long int* row_P = *_row_P;
     unsigned int* col_P = *_col_P;
     double* val_P = *_val_P;
     row_P[0] = 0;
@@ -1679,7 +1679,7 @@ void TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_ro
                     [&](const int bi, const int ei, const int t)
                     {
                         // loop over all items
-                        for(int n = bi;n<ei;n++)
+                        for(int long n = bi;n<ei;n++)
                         {
                             // inner loop
                             {
@@ -1727,9 +1727,9 @@ void TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_ro
 
 
 // Symmetrizes a sparse matrix
-void TSNE::symmetrizeMatrix(unsigned int **_row_P, unsigned int **_col_P, double **_val_P, int N) {
+void TSNE::symmetrizeMatrix(unsigned long int **_row_P, unsigned int **_col_P, double **_val_P, int N) {
     // Get sparse matrix
-    unsigned int *row_P = *_row_P;
+    unsigned long int *row_P = *_row_P;
     unsigned int *col_P = *_col_P;
     double *val_P = *_val_P;
 
@@ -1739,7 +1739,7 @@ void TSNE::symmetrizeMatrix(unsigned int **_row_P, unsigned int **_col_P, double
         printf("Memory allocation failed!\n");
         exit(1);
     }
-    for (int n = 0; n < N; n++) {
+    for (long int n = 0; n < N; n++) {
         for (int i = row_P[n]; i < row_P[n + 1]; i++) {
 
             // Check whether element (col_P[i], n) is present
@@ -1776,7 +1776,7 @@ void TSNE::symmetrizeMatrix(unsigned int **_row_P, unsigned int **_col_P, double
         printf("Memory allocation failed!\n");
         exit(1);
     }
-    for (int n = 0; n < N; n++) {
+    for (long int n = 0; n < N; n++) {
         for (unsigned int i = row_P[n];
              i < row_P[n + 1]; i++) {                                  // considering element(n, col_P[i])
 
