@@ -1297,7 +1297,7 @@ double TSNE::evaluateError(double *P, double *Y, int N, int D, double df) {
     int nN = 0;
     double sum_Q = DBL_MIN;
     for (long int n = 0; n < N; n++) {
-        for (long int m = 0; m < N; m++) {
+        for (int m = 0; m < N; m++) {
             if (n != m) {
                 //Q[nN + m] = 1.0 / pow(1.0 + DD[nN + m]/(double)df, df);
                 Q[nN + m] = 1.0 / (1.0 + DD[nN + m]/(double)df);
@@ -1501,7 +1501,7 @@ double TSNE::distances2similarities(double *D, double *P, int N, int n, double p
 
 
 // Compute input similarities using exact algorithm
-void TSNE::computeGaussianPerplexity(double *X, long int N, long int D, double *P, double perplexity, double sigma,
+void TSNE::computeGaussianPerplexity(double *X, int N, int D, double *P, double perplexity, double sigma,
                                      int perplexity_list_length, double *perplexity_list) {
     if (perplexity < 0) {
         printf("Using manually set kernel width\n");
@@ -1532,7 +1532,7 @@ void TSNE::computeGaussianPerplexity(double *X, long int N, long int D, double *
 
 
 // Compute input similarities using ANNOY
-long int TSNE::computeGaussianPerplexity(double *X, long int N, long int D, unsigned int **_row_P, unsigned int **_col_P,
+long int TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row_P, unsigned int **_col_P,
                                     double **_val_P, double perplexity, int K, double sigma, int num_trees, 
                                     int search_k, unsigned int nthreads, int perplexity_list_length, 
                                     double *perplexity_list, int rand_seed) {
