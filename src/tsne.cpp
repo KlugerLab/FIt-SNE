@@ -202,7 +202,7 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
 			// Symmetrize input similarities
 			printf("Symmetrizing...\n");
 			int nN = 0;
-			for (int n = 0; n < N; n++) {
+			for (long int n = 0; n < N; n++) {
 				int mN = (n + 1) * N;
 				for (int m = n + 1; m < N; m++) {
 					P[nN + m] += P[mN + n];
@@ -390,7 +390,7 @@ int TSNE::run(double *X, int N, int D, double *Y, int no_dims, double perplexity
     double max_sum_cols = 0;
     // Compute maximum possible exaggeration coefficient, if user requests
     if (early_exag_coeff == 0) {
-        for (int n = 0; n < N; n++) {
+        for (long int n = 0; n < N; n++) {
             double running_sum = 0;
             for (int i = row_P[n]; i < row_P[n + 1]; i++) {
                 running_sum += val_P[i];
@@ -1186,7 +1186,7 @@ void TSNE::computeExactGradientTest(double *Y, int N, int D, double df ) {
     }
     double sum_Q = .0;
     int nN = 0;
-    for (int n = 0; n < N; n++) {
+    for (long int n = 0; n < N; n++) {
         for (int m = 0; m < N; m++) {
             if (n != m) {
                 Q[nN + m] = 1.0 / pow(1.0 + DD[nN + m]/(double)df, (df));
@@ -1202,7 +1202,7 @@ void TSNE::computeExactGradientTest(double *Y, int N, int D, double df ) {
     FILE *fp = fopen(buffer, "w"); // Open file for writing
     nN = 0;
     int nD = 0;
-    for (int n = 0; n < N; n++) {
+    for (long int n = 0; n < N; n++) {
         double testQij = 0;
         double testPos = 0;
         double testNeg1 = 0;
@@ -1247,7 +1247,7 @@ void TSNE::computeExactGradient(double *P, double *Y, int N, int D, double *dC, 
 
     double sum_Q = .0;
     int nN = 0;
-    for (int n = 0; n < N; n++) {
+    for (long int n = 0; n < N; n++) {
         for (int m = 0; m < N; m++) {
             if (n != m) {
                 //Q[nN + m] = 1.0 / pow(1.0 + DD[nN + m]/(double)df, df);
@@ -1262,7 +1262,7 @@ void TSNE::computeExactGradient(double *P, double *Y, int N, int D, double *dC, 
     // Perform the computation of the gradient
     nN = 0;
     int nD = 0;
-    for (int n = 0; n < N; n++) {
+    for (long int n = 0; n < N; n++) {
         int mD = 0;
         for (int m = 0; m < N; m++) {
             if (n != m) {
@@ -1296,7 +1296,7 @@ double TSNE::evaluateError(double *P, double *Y, int N, int D, double df) {
     // Compute Q-matrix and normalization sum
     int nN = 0;
     double sum_Q = DBL_MIN;
-    for (int n = 0; n < N; n++) {
+    for (long int n = 0; n < N; n++) {
         for (int m = 0; m < N; m++) {
             if (n != m) {
                 //Q[nN + m] = 1.0 / pow(1.0 + DD[nN + m]/(double)df, df);
@@ -1362,7 +1362,7 @@ double TSNE::evaluateError(unsigned int *row_P, unsigned int *col_P, double *val
     SPTree *tree = new SPTree(D, Y, N);
     double *buff = (double *) calloc(D, sizeof(double));
     double sum_Q = .0;
-    for (int n = 0; n < N; n++) tree->computeNonEdgeForces(n, theta, buff, &sum_Q);
+    for (long int n = 0; n < N; n++) tree->computeNonEdgeForces(n, theta, buff, &sum_Q);
 
     double C = .0;
         PARALLEL_FOR(nthreads,N,{
@@ -1520,7 +1520,7 @@ void TSNE::computeGaussianPerplexity(double *X, int N, int D, double *P, double 
     // Convert distances to similarities using Gaussian kernel row by row
     int nN = 0;
     double beta;
-    for (int n = 0; n < N; n++) {
+    for (long int n = 0; n < N; n++) {
         beta = distances2similarities(&DD[nN], &P[nN], N, n, perplexity, sigma, true, 
                                       perplexity_list_length, perplexity_list);
         nN += N;
@@ -1532,7 +1532,7 @@ void TSNE::computeGaussianPerplexity(double *X, int N, int D, double *P, double 
 
 
 // Compute input similarities using ANNOY
-int TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row_P, unsigned int **_col_P,
+long int TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row_P, unsigned int **_col_P,
                                     double **_val_P, double perplexity, int K, double sigma, int num_trees, 
                                     int search_k, unsigned int nthreads, int perplexity_list_length, 
                                     double *perplexity_list, int rand_seed) {
@@ -1549,7 +1549,7 @@ int TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row
     unsigned int* col_P = *_col_P;
     double* val_P = *_val_P;
     row_P[0] = 0;
-    for(int n = 0; n < N; n++) row_P[n + 1] = row_P[n] + (unsigned int) K;
+    for(long int n = 0; n < N; n++) row_P[n + 1] = row_P[n] + (unsigned int) K;
 
     printf("Building Annoy tree...\n");
     AnnoyIndex<int, double, Euclidean, Kiss32Random> tree = AnnoyIndex<int, double, Euclidean, Kiss32Random>(D);
@@ -1640,7 +1640,7 @@ int TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row
 
 
 // Compute input similarities with a fixed perplexity using ball trees (this function allocates memory another function should free)
-void TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row_P, unsigned int **_col_P, 
+void TSNE::computeGaussianPerplexity(double *X, long int N, long int D, unsigned int **_row_P, unsigned int **_col_P, 
                                      double **_val_P, double perplexity, int K, double sigma, unsigned int nthreads,
                                      int perplexity_list_length, double *perplexity_list) {
 
@@ -1656,7 +1656,7 @@ void TSNE::computeGaussianPerplexity(double *X, int N, int D, unsigned int **_ro
     unsigned int* col_P = *_col_P;
     double* val_P = *_val_P;
     row_P[0] = 0;
-    for(int n = 0; n < N; n++) row_P[n + 1] = row_P[n] + (unsigned int) K;
+    for(long int n = 0; n < N; n++) row_P[n + 1] = row_P[n] + (unsigned long int) K;
 
     // Build ball tree on data set
     printf("Building VP tree...\n");
@@ -1755,7 +1755,7 @@ void TSNE::symmetrizeMatrix(unsigned int **_row_P, unsigned int **_col_P, double
         }
     }
     int no_elem = 0;
-    for (int n = 0; n < N; n++) no_elem += row_counts[n];
+    for (long int n = 0; n < N; n++) no_elem += row_counts[n];
 
     // Allocate memory for symmetrized matrix
     unsigned int *sym_row_P = (unsigned int *) malloc((N + 1) * sizeof(unsigned int));
@@ -1768,7 +1768,7 @@ void TSNE::symmetrizeMatrix(unsigned int **_row_P, unsigned int **_col_P, double
 
     // Construct new row indices for symmetric matrix
     sym_row_P[0] = 0;
-    for (int n = 0; n < N; n++) sym_row_P[n + 1] = sym_row_P[n] + (unsigned int) row_counts[n];
+    for (long int n = 0; n < N; n++) sym_row_P[n + 1] = sym_row_P[n] + (unsigned int) row_counts[n];
 
     // Fill the result matrix
     int *offset = (int *) calloc(N, sizeof(int));
@@ -1776,7 +1776,7 @@ void TSNE::symmetrizeMatrix(unsigned int **_row_P, unsigned int **_col_P, double
         printf("Memory allocation failed!\n");
         exit(1);
     }
-    for (int n = 0; n < N; n++) {
+    for (long int n = 0; n < N; n++) {
         for (unsigned int i = row_P[n];
              i < row_P[n + 1]; i++) {                                  // considering element(n, col_P[i])
 
@@ -1838,7 +1838,7 @@ void TSNE::computeSquaredEuclideanDistance(double *X, int N, int D, double *DD) 
         double *curr_elem_sym = curr_elem + N;
         for (int m = n + 1; m < N; ++m, XmD += D, curr_elem_sym += N) {
             *(++curr_elem) = 0.0;
-            for (int d = 0; d < D; ++d) {
+            for (long int d = 0; d < D; ++d) {
                 *curr_elem += (XnD[d] - XmD[d]) * (XnD[d] - XmD[d]);
             }
             *curr_elem_sym = *curr_elem;
@@ -1854,7 +1854,7 @@ void TSNE::zeroMean(double *X, int N, int D) {
     if (mean == NULL) throw std::bad_alloc();
 
     unsigned long nD = 0;
-    for (int n = 0; n < N; n++) {
+    for (long int n = 0; n < N; n++) {
         for (int d = 0; d < D; d++) {
             mean[d] += X[nD + d];
         }
@@ -1866,7 +1866,7 @@ void TSNE::zeroMean(double *X, int N, int D) {
 
     // Subtract data mean
     nD = 0;
-    for (int n = 0; n < N; n++) {
+    for (long int n = 0; n < N; n++) {
         for (int d = 0; d < D; d++) {
             X[nD + d] -= mean[d];
         }

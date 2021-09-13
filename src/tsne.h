@@ -104,7 +104,7 @@ private:
                                    double **_val_P, double perplexity, int K, double sigma, unsigned int nthreads,
                                    int perplexity_list_length, double *perplexity_list);
 
-    int computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row_P, unsigned int **_col_P,
+    long int computeGaussianPerplexity(double *X, int N, int D, unsigned int **_row_P, unsigned int **_col_P,
                                   double **_val_P, double perplexity, int K, double sigma, int num_trees, int search_k,
                                   unsigned int nthreads, int perplexity_list_length, double *perplexity_list,
                                   int rand_seed);
